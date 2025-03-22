@@ -2,24 +2,14 @@ package models
 
 // AttractionInfo represents the public information about an attraction
 type AttractionInfo struct {
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	Price       float64 `json:"price"`
-	URL         string  `json:"url"`
-}
-
-// ListAttractionInfoResponse represents the response from the attractions endpoint
-type ListAttractionInfoResponse struct {
-	Attractions []AttractionInfo `json:"attractions"`
+	URL string `json:"url"`
 }
 
 // RegisterAttractionRequest represents a request to register a new attraction
 type RegisterAttractionRequest struct {
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	Price       float64 `json:"price"`
-	RepairFee   float64 `json:"repair_fee"`
-	URL         string  `json:"url"`
+	URL        string `json:"url"`
+	BuildCost  int    `json:"build_cost"`
+	RepairCost int    `json:"repair_cost"`
 }
 
 // RegisterAttractionResponse represents the response from the register endpoint

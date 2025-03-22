@@ -6,7 +6,7 @@ import (
 
 // ParkMetrics contains all metrics specific to the main park simulator
 var metrics = struct {
-	Cash         prometheus.Gauge
+	Money        prometheus.Gauge
 	Time         prometheus.Gauge
 	EntranceFee  prometheus.Gauge
 	OpensAt      prometheus.Gauge
@@ -14,9 +14,9 @@ var metrics = struct {
 	IsParkClosed prometheus.Gauge
 	Guests       prometheus.Gauge
 }{
-	Cash: prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "park_cash",
-		Help: "Current cash amount in the park",
+	Money: prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "park_money",
+		Help: "Current money amount in the park",
 	}),
 
 	Time: prometheus.NewGauge(prometheus.GaugeOpts{
@@ -52,7 +52,7 @@ var metrics = struct {
 
 // RegisterParkMetrics registers all park-specific metrics
 func RegisterParkMetrics() {
-	prometheus.MustRegister(metrics.Cash)
+	prometheus.MustRegister(metrics.Money)
 	prometheus.MustRegister(metrics.Time)
 	prometheus.MustRegister(metrics.EntranceFee)
 	prometheus.MustRegister(metrics.OpensAt)

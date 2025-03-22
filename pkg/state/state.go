@@ -3,6 +3,7 @@ package state
 import (
 	"encoding/json"
 	"fmt"
+	"kubepark/pkg/models"
 	"os"
 	"path/filepath"
 	"sync"
@@ -11,17 +12,15 @@ import (
 
 // AttractionState represents the state of an attraction
 type AttractionState struct {
-	Name        string  `json:"name"`
-	Description string  `json:"description"`
-	Price       float64 `json:"price"`
-	URL         string  `json:"url"`
-	RepairFee   float64 `json:"repair_fee"`
-	IsRepaired  bool    `json:"is_repaired"`
+	URL        string `json:"url"`
+	BuildCost  int    `json:"build_cost"`
+	RepairCost int    `json:"repair_cost"`
+	IsRepaired bool   `json:"is_repaired"`
 }
 
 // GameState represents the current state of the park
 type GameState struct {
-	Cash        float64                    `json:"cash"`
+	Money       float64                    `json:"money"`
 	CurrentTime time.Time                  `json:"current_time"`
 	LastSaved   time.Time                  `json:"last_saved"`
 	Mode        string                     `json:"mode"`
@@ -40,7 +39,7 @@ func New(volumePath string) (*GameState, error) {
 		VolumePath:  volumePath,
 		CurrentTime: time.Now(),
 		LastSaved:   time.Now(),
-		Cash:        1000, // Starting cash
+		Money:       1000, // Starting cash
 		Attractions: make(map[string]AttractionState),
 	}
 
@@ -110,24 +109,24 @@ func (s *GameState) Save() error {
 }
 
 // AddCash adds to the park's cash amount
-func (s *GameState) AddCash(amount float64) {
+func (s *GameState) AddMoney(amount float64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.Cash += amount
+	s.Money += amount
 }
 
 // SetCash sets the park's cash amount
-func (s *GameState) SetCash(amount float64) {
+func (s *GameState) SetMoney(amount float64) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.Cash = amount
+	s.Money = amount
 }
 
 // GetCash returns the park's current cash amount
-func (s *GameState) GetCash() float64 {
+func (s *GameState) GetMoney() float64 {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	return s.Cash
+	return s.Money
 }
 
 // UpdateTime updates the park's current time
@@ -159,52 +158,32 @@ func (s *GameState) IsClosed() bool {
 }
 
 // RegisterAttraction registers a new attraction or updates an existing one
-func (s *GameState) RegisterAttraction(name, description string, price, repairFee float64, url string) (bool, error) {
+func (s *GameState) RegisterAttraction(req models.RegisterAttractionRequest) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	_, exists := s.Attractions[req.URL]
+
 	// Check if we have enough cash for a new attraction
-	if _, exists := s.Attractions[url]; !exists {
-		if s.Cash < price {
+	if exists {
+		if s.Money < float64(req.RepairCost) {
+			return false, fmt.Errorf("insufficient funds to repair attraction")
+		}
+		s.Money -= float64(req.RepairCost)
+	} else {
+		if s.Money < float64(req.BuildCost) {
 			return false, fmt.Errorf("insufficient funds to purchase attraction")
 		}
-		s.Cash -= price
+		s.Money -= float64(req.BuildCost)
 	}
 
 	// Update or create the attraction state
-	s.Attractions[url] = AttractionState{
-		Name:        name,
-		Description: description,
-		Price:       price,
-		URL:         url,
-		RepairFee:   repairFee,
-		IsRepaired:  true,
+	s.Attractions[req.URL] = AttractionState{
+		URL:        req.URL,
+		BuildCost:  req.BuildCost,
+		RepairCost: req.RepairCost,
+		IsRepaired: true,
 	}
-
-	return true, nil
-}
-
-// RepairAttraction repairs a broken attraction
-func (s *GameState) RepairAttraction(url string) (bool, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	attraction, exists := s.Attractions[url]
-	if !exists {
-		return false, fmt.Errorf("attraction not found")
-	}
-
-	if attraction.IsRepaired {
-		return false, fmt.Errorf("attraction is already repaired")
-	}
-
-	if s.Cash < attraction.RepairFee {
-		return false, fmt.Errorf("insufficient funds for repair")
-	}
-
-	s.Cash -= attraction.RepairFee
-	attraction.IsRepaired = true
-	s.Attractions[url] = attraction
 
 	return true, nil
 }

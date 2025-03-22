@@ -97,7 +97,7 @@ func (p *Park) Start() error {
 
 		for range ticker.C {
 			// Update metrics
-			metrics.Cash.Set(p.State.GetCash())
+			metrics.Money.Set(p.State.GetMoney())
 			metrics.Time.Set(float64(p.State.GetTime().Unix()))
 
 			// Save state every minute

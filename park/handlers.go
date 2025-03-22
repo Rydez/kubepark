@@ -23,7 +23,7 @@ func handlePayPark(state *state.GameState) http.HandlerFunc {
 		}
 
 		// Add the payment to the park's cash
-		state.AddCash(req.Amount)
+		state.AddMoney(req.Amount)
 		w.WriteHeader(http.StatusOK)
 	}
 }
@@ -46,7 +46,7 @@ func handleEnterPark(state *state.GameState) http.HandlerFunc {
 		}
 
 		// Process entrance fee
-		state.AddCash(state.EntranceFee)
+		state.AddMoney(state.EntranceFee)
 
 		json.NewEncoder(w).Encode(models.EnterParkResponse{
 			Success: true,
@@ -68,10 +68,7 @@ func handleListAttractions(state *state.GameState) http.HandlerFunc {
 		for _, attractionState := range attractionStates {
 			if attractionState.IsRepaired {
 				attractions = append(attractions, models.AttractionInfo{
-					Name:        attractionState.Name,
-					Description: attractionState.Description,
-					Price:       attractionState.Price,
-					URL:         attractionState.URL,
+					URL: attractionState.URL,
 				})
 			}
 		}
@@ -94,7 +91,7 @@ func handleRegisterAttraction(state *state.GameState) http.HandlerFunc {
 			return
 		}
 
-		success, err := state.RegisterAttraction(req.Name, req.Description, req.Price, req.RepairFee, req.URL)
+		success, err := state.RegisterAttraction(req)
 		if err != nil {
 			json.NewEncoder(w).Encode(models.RegisterAttractionResponse{
 				Success: false,

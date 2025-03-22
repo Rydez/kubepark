@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"time"
 
 	"kubepark/pkg/models"
 
@@ -21,13 +20,7 @@ type Attraction struct {
 }
 
 // New creates a new base attraction
-func New(name string, defaultFee float64, duration time.Duration) *Attraction {
-	config := &Config{
-		Name:     name,
-		Fee:      defaultFee,
-		Duration: duration,
-	}
-
+func New(config *Config, defaultFee float64) *Attraction {
 	RegisterFlags(config, defaultFee)
 
 	RegisterAttractionMetrics()
@@ -58,13 +51,10 @@ func New(name string, defaultFee float64, duration time.Duration) *Attraction {
 // Register registers the attraction with kubepark
 func (a *Attraction) Register() error {
 	registrationData := models.RegisterAttractionRequest{
-		Name:        a.Config.Name,
-		Description: fmt.Sprintf("A %s attraction", a.Config.Name),
-		Price:       a.Config.Fee,
-		RepairFee:   a.Config.Fee * 2, // Repair fee is double the usage fee
-		URL:         fmt.Sprintf("http://%s:80", a.Config.Name),
+		URL:        fmt.Sprintf("http://%s:80", a.Config.Name),
+		BuildCost:  a.Config.BuildCost,
+		RepairCost: a.Config.RepairCost,
 	}
-
 	data, err := json.Marshal(registrationData)
 	if err != nil {
 		return fmt.Errorf("failed to marshal registration data: %v", err)
@@ -143,11 +133,6 @@ func (a *Attraction) ValidatePayment(w http.ResponseWriter, r *http.Request) (fl
 	}
 
 	return useReq.GuestMoney, nil
-}
-
-// handleMetrics handles the metrics endpoint
-func handleMetrics(w http.ResponseWriter, r *http.Request) {
-	promhttp.Handler().ServeHTTP(w, r)
 }
 
 // btof converts a bool to a float64 (0 or 1)

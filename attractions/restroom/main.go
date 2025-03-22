@@ -15,7 +15,17 @@ type Restroom struct {
 
 // New creates a new restroom attraction
 func New() *Restroom {
-	base := attraction.New("restroom", 2, 2*time.Second)
+	config := &attraction.Config{
+		Name:       "restroom",
+		Fee:        2,
+		Duration:   2 * time.Second,
+		BuildCost:  10000,
+		RepairCost: 500,
+	}
+
+	defaultFee := 2.0
+
+	base := attraction.New(config, defaultFee)
 	restroom := &Restroom{Attraction: base}
 
 	// Add the /use endpoint specific to the restroom

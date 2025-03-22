@@ -15,7 +15,16 @@ type Carousel struct {
 
 // New creates a new carousel attraction
 func New() *Carousel {
-	base := attraction.New("carousel", 5, 3*time.Second)
+	config := &attraction.Config{
+		Name:       "carousel",
+		Duration:   3 * time.Second,
+		BuildCost:  20000,
+		RepairCost: 1000,
+	}
+
+	defaultFee := 5.0
+
+	base := attraction.New(config, defaultFee)
 	carousel := &Carousel{Attraction: base}
 
 	// Add the /use endpoint specific to the carousel
