@@ -7,33 +7,38 @@ import (
 // ParkMetrics contains all metrics specific to the main kubepark simulator
 var (
 	Cash = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "cash",
-		Help: "Current amount of money available",
+		Name: "kubepark_cash",
+		Help: "Current cash amount in the park",
 	})
 
 	Time = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "time",
-		Help: "Current time in the park (unix timestamp)",
+		Name: "kubepark_time",
+		Help: "Current time in the park (Unix timestamp)",
 	})
 
 	EntranceFee = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "entrance_fee",
-		Help: "Current entrance fee for the park",
+		Name: "kubepark_entrance_fee",
+		Help: "Current entrance fee",
 	})
 
 	OpensAt = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "opens_at",
+		Name: "kubepark_opens_at",
 		Help: "Hour at which the park opens",
 	})
 
 	ClosesAt = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "closes_at",
+		Name: "kubepark_closes_at",
 		Help: "Hour at which the park closes",
 	})
 
 	IsParkClosed = prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "is_closed",
+		Name: "kubepark_is_closed",
 		Help: "Whether the park is closed (1) or open (0)",
+	})
+
+	Guests = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "kubepark_guests",
+		Help: "Current number of guests in the park",
 	})
 
 	ParkAttempts = prometheus.NewCounterVec(
@@ -79,6 +84,7 @@ func RegisterParkMetrics() {
 	prometheus.MustRegister(OpensAt)
 	prometheus.MustRegister(ClosesAt)
 	prometheus.MustRegister(IsParkClosed)
+	prometheus.MustRegister(Guests)
 	prometheus.MustRegister(ParkAttempts)
 }
 

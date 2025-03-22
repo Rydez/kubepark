@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"flag"
 	"log"
@@ -20,6 +21,7 @@ type Config struct {
 	EntranceFee float64
 	OpensAt     int
 	ClosesAt    int
+	Namespace   string
 }
 
 // Park represents the amusement park simulator
@@ -28,11 +30,46 @@ type Park struct {
 	MetricsServer *http.Server
 	MainServer    *http.Server
 	State         *state.GameState
+	GuestManager  *GuestJobManager
 }
 
 // PaymentRequest represents a request to process a payment
 type PaymentRequest struct {
 	Amount float64 `json:"amount"`
+}
+
+// EnterResponse represents the response from the enter endpoint
+type EnterResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
+}
+
+// Attraction represents an attraction in the park
+type Attraction struct {
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Price       float64 `json:"price"`
+	URL         string  `json:"url"`
+}
+
+// AttractionsResponse represents the response from the attractions endpoint
+type AttractionsResponse struct {
+	Attractions []Attraction `json:"attractions"`
+}
+
+// RegisterRequest represents a request to register a new attraction
+type RegisterRequest struct {
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	Price       float64 `json:"price"`
+	RepairFee   float64 `json:"repair_fee"`
+	URL         string  `json:"url"`
+}
+
+// RegisterResponse represents the response from the register endpoint
+type RegisterResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
 }
 
 // New creates a new park simulator
@@ -44,6 +81,7 @@ func New() *Park {
 	flag.Float64Var(&config.EntranceFee, "entrance-fee", 10, "Entrance fee for the park")
 	flag.IntVar(&config.OpensAt, "opens-at", 8, "Hour at which the park opens")
 	flag.IntVar(&config.ClosesAt, "closes-at", 20, "Hour at which the park closes")
+	flag.StringVar(&config.Namespace, "namespace", "default", "Kubernetes namespace for guest jobs")
 	flag.Parse()
 
 	// Initialize game state
@@ -58,6 +96,12 @@ func New() *Park {
 	gameState.OpensAt = config.OpensAt
 	gameState.ClosesAt = config.ClosesAt
 	gameState.SetClosed(config.Closed)
+
+	// Initialize guest job manager
+	guestManager, err := NewGuestJobManager(config.Namespace)
+	if err != nil {
+		log.Fatalf("Failed to initialize guest job manager: %v", err)
+	}
 
 	metrics.RegisterParkMetrics()
 	metrics.EntranceFee.Set(config.EntranceFee)
@@ -74,6 +118,9 @@ func New() *Park {
 	// Create main server on port 80
 	mainMux := http.NewServeMux()
 	mainMux.HandleFunc("/pay", handlePayment(gameState))
+	mainMux.HandleFunc("/enter", handleEnter(gameState))
+	mainMux.HandleFunc("/attractions", handleAttractions(gameState))
+	mainMux.HandleFunc("/register", handleRegister(gameState))
 	mainServer := &http.Server{
 		Addr:    ":80",
 		Handler: mainMux,
@@ -84,6 +131,7 @@ func New() *Park {
 		MetricsServer: metricsServer,
 		MainServer:    mainServer,
 		State:         gameState,
+		GuestManager:  guestManager,
 	}
 }
 
@@ -107,6 +155,90 @@ func handlePayment(state *state.GameState) http.HandlerFunc {
 	}
 }
 
+// handleEnter handles guest entry requests
+func handleEnter(state *state.GameState) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Check if park is closed
+		if state.IsClosed() {
+			json.NewEncoder(w).Encode(EnterResponse{
+				Success: false,
+				Message: "Park is closed",
+			})
+			return
+		}
+
+		// Process entrance fee
+		state.AddCash(state.EntranceFee)
+
+		json.NewEncoder(w).Encode(EnterResponse{
+			Success: true,
+			Message: "Welcome to the park!",
+		})
+	}
+}
+
+// handleAttractions returns a list of available attractions
+func handleAttractions(state *state.GameState) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		attractionStates := state.GetAttractions()
+		attractions := make([]Attraction, 0, len(attractionStates))
+		for _, attractionState := range attractionStates {
+			if attractionState.IsRepaired {
+				attractions = append(attractions, Attraction{
+					Name:        attractionState.Name,
+					Description: attractionState.Description,
+					Price:       attractionState.Price,
+					URL:         attractionState.URL,
+				})
+			}
+		}
+
+		json.NewEncoder(w).Encode(AttractionsResponse{
+			Attractions: attractions,
+		})
+	}
+}
+
+// handleRegister handles attraction registration requests
+func handleRegister(state *state.GameState) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req RegisterRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		success, err := state.RegisterAttraction(req.Name, req.Description, req.Price, req.RepairFee, req.URL)
+		if err != nil {
+			json.NewEncoder(w).Encode(RegisterResponse{
+				Success: false,
+				Message: err.Error(),
+			})
+			return
+		}
+
+		json.NewEncoder(w).Encode(RegisterResponse{
+			Success: success,
+			Message: "Attraction registered successfully",
+		})
+	}
+}
+
 // Start starts the park simulator
 func (p *Park) Start() error {
 	// Start the metrics server
@@ -121,6 +253,8 @@ func (p *Park) Start() error {
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
 
+		ctx := context.Background()
+
 		for range ticker.C {
 			// Update metrics
 			metrics.Cash.Set(p.State.GetCash())
@@ -133,8 +267,18 @@ func (p *Park) Start() error {
 				}
 			}
 
-			// TODO: Create and manage guests
-			// TODO: Handle park events
+			// Create new guests if park is open and not at capacity
+			if !p.State.IsClosed() {
+				// TODO: Add capacity check based on mode
+				if err := p.GuestManager.CreateGuestJob(ctx, "http://kubepark:80"); err != nil {
+					log.Printf("Failed to create guest job: %v", err)
+				}
+			}
+
+			// Cleanup old guest jobs
+			if err := p.GuestManager.CleanupOldJobs(ctx); err != nil {
+				log.Printf("Failed to cleanup old jobs: %v", err)
+			}
 		}
 	}()
 
