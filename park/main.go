@@ -2,13 +2,19 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"kubepark/pkg/state"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 // Park represents the amusement park simulator
@@ -20,11 +26,99 @@ type Park struct {
 	GuestManager  *GuestJobManager
 }
 
+// handleIsPark handles requests to check if this is a park service
+func handleIsPark() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// checkForExistingPark checks if another park service exists in the cluster
+func checkForExistingPark() error {
+	config, err := rest.InClusterConfig()
+	if err != nil {
+		return fmt.Errorf("failed to get in-cluster config: %w", err)
+	}
+
+	clientset, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return fmt.Errorf("failed to create clientset: %w", err)
+	}
+
+	// Look for pods with port 80 across all namespaces
+	pods, err := clientset.CoreV1().Pods("").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to list pods: %w", err)
+	}
+
+	// Count running park services
+	for _, pod := range pods.Items {
+		if pod.Status.Phase != corev1.PodRunning {
+			continue
+		}
+
+		// Skip the current pod
+		if pod.Name == os.Getenv("HOSTNAME") {
+			continue
+		}
+
+		// Check if pod has port 80
+		hasPort80 := false
+		for _, container := range pod.Spec.Containers {
+			for _, port := range container.Ports {
+				if port.ContainerPort == 80 {
+					hasPort80 = true
+					break
+				}
+			}
+			if hasPort80 {
+				break
+			}
+		}
+
+		if !hasPort80 {
+			continue
+		}
+
+		// Try to connect to the /is-park endpoint
+		client := &http.Client{
+			Timeout: time.Second * 2,
+		}
+
+		// Try to connect to the pod's IP
+		podIP := pod.Status.PodIP
+		if podIP == "" {
+			continue
+		}
+
+		resp, err := client.Get(fmt.Sprintf("http://%s/is-park", podIP))
+		if err != nil {
+			continue // Skip if we can't connect
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == http.StatusOK {
+			return fmt.Errorf("another park service is already running in the cluster")
+		}
+	}
+
+	return nil
+}
+
 // New creates a new park simulator
 func New() *Park {
 	config := &Config{}
 
 	RegisterFlags(config)
+
+	// Check for existing park service
+	if err := checkForExistingPark(); err != nil {
+		log.Fatalf("Failed park check: %v", err)
+	}
 
 	// Initialize game state
 	gameState, err := state.New(config.VolumePath)
@@ -65,6 +159,7 @@ func New() *Park {
 	mainMux.HandleFunc("/enter", handleEnterPark(gameState))
 	mainMux.HandleFunc("/attractions", handleListAttractions(gameState))
 	mainMux.HandleFunc("/register", handleRegisterAttraction(gameState))
+	mainMux.HandleFunc("/is-park", handleIsPark())
 	mainServer := &http.Server{
 		Addr:    ":80",
 		Handler: mainMux,
