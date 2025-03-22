@@ -39,9 +39,18 @@ func (c *Carousel) handleUse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate payment
+	_, err := c.ValidatePayment(w, r)
+	if err != nil {
+		metrics.AttractionAttempts.WithLabelValues("false", "insufficient_funds").Inc()
+		http.Error(w, err.Error(), http.StatusPaymentRequired)
+		return
+	}
+
 	// Process payment with kubepark
 	if err := c.ProcessPayment(); err != nil {
 		log.Printf("Failed to process payment: %v", err)
+		metrics.AttractionAttempts.WithLabelValues("false", "payment_failed").Inc()
 		http.Error(w, "Payment failed", http.StatusInternalServerError)
 		return
 	}

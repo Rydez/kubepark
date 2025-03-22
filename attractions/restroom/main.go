@@ -39,9 +39,18 @@ func (r *Restroom) handleUse(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
+	// Validate payment
+	_, err := r.ValidatePayment(w, req)
+	if err != nil {
+		metrics.AttractionAttempts.WithLabelValues("false", "insufficient_funds").Inc()
+		http.Error(w, err.Error(), http.StatusPaymentRequired)
+		return
+	}
+
 	// Process payment with kubepark
 	if err := r.ProcessPayment(); err != nil {
 		log.Printf("Failed to process payment: %v", err)
+		metrics.AttractionAttempts.WithLabelValues("false", "payment_failed").Inc()
 		http.Error(w, "Payment failed", http.StatusInternalServerError)
 		return
 	}

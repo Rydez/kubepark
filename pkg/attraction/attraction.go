@@ -31,9 +31,14 @@ type Attraction struct {
 	MainServer    *http.Server
 }
 
-// PaymentRequest represents a request to process a payment
+// PaymentRequest represents a request to process a payment to the park.
 type PaymentRequest struct {
 	Amount float64 `json:"amount"`
+}
+
+// UseRequest represents a request to use the attraction.
+type UseRequest struct {
+	GuestMoney float64 `json:"guest_money"`
 }
 
 // New creates a new base attraction
@@ -133,6 +138,20 @@ func (a *Attraction) ProcessPayment() error {
 	}
 
 	return nil
+}
+
+// ValidatePayment validates if a guest has enough money to use the attraction
+func (a *Attraction) ValidatePayment(w http.ResponseWriter, r *http.Request) (float64, error) {
+	var useReq UseRequest
+	if err := json.NewDecoder(r.Body).Decode(&useReq); err != nil {
+		return 0, fmt.Errorf("invalid payment request: %v", err)
+	}
+
+	if useReq.GuestMoney < a.Config.Fee {
+		return 0, fmt.Errorf("insufficient funds. Fee is $%.2f but guest has $%.2f", a.Config.Fee, useReq.GuestMoney)
+	}
+
+	return useReq.GuestMoney, nil
 }
 
 // handleMetrics handles the metrics endpoint
