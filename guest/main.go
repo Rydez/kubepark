@@ -5,12 +5,11 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"kubepark/pkg/models"
 	"log"
 	"math/rand"
 	"net/http"
 	"time"
-
-	"kubepark/pkg/attraction"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -155,7 +154,7 @@ func visitAttraction() error {
 	randAttraction := attractions[rand.Intn(len(attractions))]
 
 	// Create use request with remaining money
-	useReq := attraction.UseRequest{
+	useReq := models.UseAttractionRequest{
 		GuestMoney: config.Money,
 	}
 	useData, err := json.Marshal(useReq)

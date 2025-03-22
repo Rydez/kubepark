@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"kubepark/pkg/attraction"
-	"kubepark/pkg/metrics"
 )
 
 // Restroom represents a restroom attraction
@@ -33,8 +32,8 @@ func (r *Restroom) handleUse(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 
-	if r.IsClosed() {
-		metrics.AttractionAttempts.WithLabelValues("false", "attraction_closed").Inc()
+	if r.Config.Closed {
+		attraction.Metrics.AttractionAttempts.WithLabelValues("false", "attraction_closed").Inc()
 		http.Error(w, "Restroom is closed", http.StatusServiceUnavailable)
 		return
 	}
@@ -42,30 +41,30 @@ func (r *Restroom) handleUse(w http.ResponseWriter, req *http.Request) {
 	// Validate payment
 	_, err := r.ValidatePayment(w, req)
 	if err != nil {
-		metrics.AttractionAttempts.WithLabelValues("false", "insufficient_funds").Inc()
+		attraction.Metrics.AttractionAttempts.WithLabelValues("false", "insufficient_funds").Inc()
 		http.Error(w, err.Error(), http.StatusPaymentRequired)
 		return
 	}
 
 	// Process payment with kubepark
-	if err := r.ProcessPayment(); err != nil {
+	if err := r.PayPark(); err != nil {
 		log.Printf("Failed to process payment: %v", err)
-		metrics.AttractionAttempts.WithLabelValues("false", "payment_failed").Inc()
+		attraction.Metrics.AttractionAttempts.WithLabelValues("false", "payment_failed").Inc()
 		http.Error(w, "Payment failed", http.StatusInternalServerError)
 		return
 	}
 
 	// Simulate usage duration
-	time.Sleep(r.GetDuration())
+	time.Sleep(r.Config.Duration)
 
-	metrics.Revenue.Add(r.GetFee())
-	metrics.AttractionAttempts.WithLabelValues("true", "success").Inc()
+	attraction.Metrics.Revenue.Add(r.Config.Fee)
+	attraction.Metrics.AttractionAttempts.WithLabelValues("true", "success").Inc()
 
 	w.WriteHeader(http.StatusOK)
 }
 
 func main() {
 	restroom := New()
-	log.Printf("Starting restroom attraction with park URL: %s", restroom.GetParkURL())
+	log.Printf("Starting restroom attraction with park URL: %s", restroom.Config.ParkURL)
 	log.Fatal(restroom.Start())
 }

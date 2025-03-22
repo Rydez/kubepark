@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"kubepark/pkg/attraction"
-	"kubepark/pkg/metrics"
 )
 
 // Carousel represents a carousel attraction
@@ -33,8 +32,8 @@ func (c *Carousel) handleUse(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if c.IsClosed() {
-		metrics.AttractionAttempts.WithLabelValues("false", "attraction_closed").Inc()
+	if c.Config.Closed {
+		attraction.Metrics.AttractionAttempts.WithLabelValues("false", "attraction_closed").Inc()
 		http.Error(w, "Carousel is closed", http.StatusServiceUnavailable)
 		return
 	}
@@ -42,30 +41,30 @@ func (c *Carousel) handleUse(w http.ResponseWriter, r *http.Request) {
 	// Validate payment
 	_, err := c.ValidatePayment(w, r)
 	if err != nil {
-		metrics.AttractionAttempts.WithLabelValues("false", "insufficient_funds").Inc()
+		attraction.Metrics.AttractionAttempts.WithLabelValues("false", "insufficient_funds").Inc()
 		http.Error(w, err.Error(), http.StatusPaymentRequired)
 		return
 	}
 
 	// Process payment with kubepark
-	if err := c.ProcessPayment(); err != nil {
+	if err := c.PayPark(); err != nil {
 		log.Printf("Failed to process payment: %v", err)
-		metrics.AttractionAttempts.WithLabelValues("false", "payment_failed").Inc()
+		attraction.Metrics.AttractionAttempts.WithLabelValues("false", "payment_failed").Inc()
 		http.Error(w, "Payment failed", http.StatusInternalServerError)
 		return
 	}
 
 	// Simulate ride duration
-	time.Sleep(c.GetDuration())
+	time.Sleep(c.Config.Duration)
 
-	metrics.Revenue.Add(c.GetFee())
-	metrics.AttractionAttempts.WithLabelValues("true", "success").Inc()
+	attraction.Metrics.Revenue.Add(c.Config.Fee)
+	attraction.Metrics.AttractionAttempts.WithLabelValues("true", "success").Inc()
 
 	w.WriteHeader(http.StatusOK)
 }
 
 func main() {
 	carousel := New()
-	log.Printf("Starting carousel attraction with park URL: %s", carousel.GetParkURL())
+	log.Printf("Starting carousel attraction with park URL: %s", carousel.Config.ParkURL)
 	log.Fatal(carousel.Start())
 }

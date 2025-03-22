@@ -3,42 +3,21 @@ package attraction
 import (
 	"bytes"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"log"
 	"net/http"
 	"time"
 
-	"kubepark/pkg/metrics"
+	"kubepark/pkg/models"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
-
-// Config represents the common configuration for all attractions
-type Config struct {
-	Closed     bool
-	Fee        float64
-	VolumePath string
-	ParkURL    string
-	Name       string
-	Duration   time.Duration
-}
 
 // Attraction represents a base attraction that can be embedded by specific attractions
 type Attraction struct {
 	Config        *Config
 	MetricsServer *http.Server
 	MainServer    *http.Server
-}
-
-// PaymentRequest represents a request to process a payment to the park.
-type PaymentRequest struct {
-	Amount float64 `json:"amount"`
-}
-
-// UseRequest represents a request to use the attraction.
-type UseRequest struct {
-	GuestMoney float64 `json:"guest_money"`
 }
 
 // New creates a new base attraction
@@ -49,20 +28,18 @@ func New(name string, defaultFee float64, duration time.Duration) *Attraction {
 		Duration: duration,
 	}
 
-	flag.BoolVar(&config.Closed, "closed", false, "Whether the attraction is closed")
-	flag.StringVar(&config.ParkURL, "park-url", "http://kubepark:80", "URL of the kubepark service")
-	flag.StringVar(&config.VolumePath, "volume", "", "Path to volume for persistent storage")
-	flag.Float64Var(&config.Fee, "fee", defaultFee, "Fee for using the attraction")
-	flag.Parse()
+	RegisterFlags(config, defaultFee)
 
-	metrics.RegisterAttractionMetrics()
-	metrics.Fee.Set(config.Fee)
-	metrics.IsAttractionClosed.Set(btof(config.Closed))
+	RegisterAttractionMetrics()
+	Metrics.Fee.Set(config.Fee)
+	Metrics.IsAttractionClosed.Set(btof(config.Closed))
 
 	// Create metrics server on port 9000
+	metricsMux := http.NewServeMux()
+	metricsMux.HandleFunc("/metrics", promhttp.Handler().ServeHTTP)
 	metricsServer := &http.Server{
 		Addr:    ":9000",
-		Handler: http.HandlerFunc(handleMetrics),
+		Handler: metricsMux,
 	}
 
 	// Create main server on port 80
@@ -78,8 +55,42 @@ func New(name string, defaultFee float64, duration time.Duration) *Attraction {
 	}
 }
 
+// Register registers the attraction with kubepark
+func (a *Attraction) Register() error {
+	registrationData := models.RegisterAttractionRequest{
+		Name:        a.Config.Name,
+		Description: fmt.Sprintf("A %s attraction", a.Config.Name),
+		Price:       a.Config.Fee,
+		RepairFee:   a.Config.Fee * 2, // Repair fee is double the usage fee
+		URL:         fmt.Sprintf("http://%s:80", a.Config.Name),
+	}
+
+	data, err := json.Marshal(registrationData)
+	if err != nil {
+		return fmt.Errorf("failed to marshal registration data: %v", err)
+	}
+
+	resp, err := http.Post(a.Config.ParkURL+"/register", "application/json", bytes.NewBuffer(data))
+	if err != nil {
+		return fmt.Errorf("failed to register with kubepark: %v", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("registration failed with status: %d", resp.StatusCode)
+	}
+
+	log.Printf("Successfully registered %s with kubepark", a.Config.Name)
+	return nil
+}
+
 // Start starts both the metrics and main HTTP servers
 func (a *Attraction) Start() error {
+	// Register with kubepark
+	if err := a.Register(); err != nil {
+		return fmt.Errorf("failed to register attraction: %v", err)
+	}
+
 	// Start metrics server
 	go func() {
 		if err := a.MetricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -99,29 +110,9 @@ func (a *Attraction) Stop() error {
 	return a.MainServer.Close()
 }
 
-// IsClosed returns whether the attraction is closed
-func (a *Attraction) IsClosed() bool {
-	return a.Config.Closed
-}
-
-// GetFee returns the attraction's fee
-func (a *Attraction) GetFee() float64 {
-	return a.Config.Fee
-}
-
-// GetParkURL returns the park's URL
-func (a *Attraction) GetParkURL() string {
-	return a.Config.ParkURL
-}
-
-// GetDuration returns the attraction's usage duration
-func (a *Attraction) GetDuration() time.Duration {
-	return a.Config.Duration
-}
-
-// ProcessPayment processes a payment with the park
-func (a *Attraction) ProcessPayment() error {
-	paymentReq := PaymentRequest{Amount: a.Config.Fee}
+// PayPark processes a payment with the park
+func (a *Attraction) PayPark() error {
+	paymentReq := models.PayParkRequest{Amount: a.Config.Fee}
 	paymentData, err := json.Marshal(paymentReq)
 	if err != nil {
 		return err
@@ -142,7 +133,7 @@ func (a *Attraction) ProcessPayment() error {
 
 // ValidatePayment validates if a guest has enough money to use the attraction
 func (a *Attraction) ValidatePayment(w http.ResponseWriter, r *http.Request) (float64, error) {
-	var useReq UseRequest
+	var useReq models.UseAttractionRequest
 	if err := json.NewDecoder(r.Body).Decode(&useReq); err != nil {
 		return 0, fmt.Errorf("invalid payment request: %v", err)
 	}

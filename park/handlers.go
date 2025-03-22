@@ -1,0 +1,111 @@
+package main
+
+import (
+	"encoding/json"
+	"net/http"
+
+	"kubepark/pkg/models"
+	"kubepark/pkg/state"
+)
+
+// handlePayPark handles payment requests from attractions
+func handlePayPark(state *state.GameState) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req models.PayParkRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		// Add the payment to the park's cash
+		state.AddCash(req.Amount)
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// handleEnterPark handles guest entry requests
+func handleEnterPark(state *state.GameState) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Check if park is closed
+		if state.IsClosed() {
+			json.NewEncoder(w).Encode(models.EnterParkResponse{
+				Success: false,
+				Message: "Park is closed",
+			})
+			return
+		}
+
+		// Process entrance fee
+		state.AddCash(state.EntranceFee)
+
+		json.NewEncoder(w).Encode(models.EnterParkResponse{
+			Success: true,
+			Message: "Welcome to the park!",
+		})
+	}
+}
+
+// handleListAttractions returns a list of available attractions
+func handleListAttractions(state *state.GameState) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		attractionStates := state.GetAttractions()
+		attractions := make([]models.AttractionInfo, 0, len(attractionStates))
+		for _, attractionState := range attractionStates {
+			if attractionState.IsRepaired {
+				attractions = append(attractions, models.AttractionInfo{
+					Name:        attractionState.Name,
+					Description: attractionState.Description,
+					Price:       attractionState.Price,
+					URL:         attractionState.URL,
+				})
+			}
+		}
+
+		json.NewEncoder(w).Encode(attractions)
+	}
+}
+
+// handleRegisterAttraction handles attraction registration requests
+func handleRegisterAttraction(state *state.GameState) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req models.RegisterAttractionRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		success, err := state.RegisterAttraction(req.Name, req.Description, req.Price, req.RepairFee, req.URL)
+		if err != nil {
+			json.NewEncoder(w).Encode(models.RegisterAttractionResponse{
+				Success: false,
+				Message: err.Error(),
+			})
+			return
+		}
+
+		json.NewEncoder(w).Encode(models.RegisterAttractionResponse{
+			Success: success,
+			Message: "Attraction registered successfully",
+		})
+	}
+}
