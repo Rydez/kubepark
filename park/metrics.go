@@ -4,7 +4,7 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-// ParkMetrics contains all metrics specific to the main kubepark simulator
+// ParkMetrics contains all metrics specific to the main park simulator
 var metrics = struct {
 	Cash         prometheus.Gauge
 	Time         prometheus.Gauge
@@ -15,37 +15,37 @@ var metrics = struct {
 	Guests       prometheus.Gauge
 }{
 	Cash: prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "kubepark_cash",
+		Name: "park_cash",
 		Help: "Current cash amount in the park",
 	}),
 
 	Time: prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "kubepark_time",
+		Name: "park_time",
 		Help: "Current time in the park (Unix timestamp)",
 	}),
 
 	EntranceFee: prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "kubepark_entrance_fee",
+		Name: "park_entrance_fee",
 		Help: "Current entrance fee",
 	}),
 
 	OpensAt: prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "kubepark_opens_at",
+		Name: "park_opens_at",
 		Help: "Hour at which the park opens",
 	}),
 
 	ClosesAt: prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "kubepark_closes_at",
+		Name: "park_closes_at",
 		Help: "Hour at which the park closes",
 	}),
 
 	IsParkClosed: prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "kubepark_is_closed",
+		Name: "park_is_closed",
 		Help: "Whether the park is closed (1) or open (0)",
 	}),
 
 	Guests: prometheus.NewGauge(prometheus.GaugeOpts{
-		Name: "kubepark_guests",
+		Name: "park_guests",
 		Help: "Current number of guests in the park",
 	}),
 }

@@ -1,12 +1,10 @@
-# kubepark 🎢
+# park 🎢
 
-kubepark is the central service that orchestrates your entire amusement park simulation. This powerful management system:
+The park is the central service that orchestrates your entire amusement park simulation. This service manages park operations and finances, coordinates guest jobs, handles attraction registration and discovery, provides park-level logs and metrics, and controls park operating hours.
 
-- Manages park operations and finances
-- Coordinates guest jobs
-- Handles attraction registration and discovery
-- Provides comprehensive park metrics
-- Controls park operating hours
+## 🚀 Launch
+
+The park requires a deployment. No need to set a container command, we want the default one. You'll also need a service so that other components can make HTTP requests to the park deployment.
 
 ## 🔧 Configuration
 
@@ -22,21 +20,15 @@ kubepark can be configured with the following arguments:
 
 kubepark exposes Prometheus metrics at `/metrics` on port 9000:
 
-- `revenue`: Total money earned from entry fees
-- `entry_fee`: Current entry fee
-- `is_closed`: Park status (0=open, 1=closed)
-- `guests`: Number of guests in the park
-- `attractions`: Number of registered attractions
-- `attempts`: Guest interaction attempts with labels:
+- `park_revenue`: Total money earned from entry fees
+- `park_entry_fee`: Current entry fee
+- `park_is_closed`: Park status (0=open, 1=closed)
+- `park_guests`: Number of guests in the park
+- `park_attractions`: Number of registered attractions
+- `park_attempts`: Guest interaction attempts with labels:
   - `success`: true/false
   - `reason`: Detailed explanation of the outcome
 
-## 📝 Logging
+## 🪵 Logging
 
-kubepark provides detailed logs about:
-
-- Park status changes
-- Guest entry and exit events
-- Attraction registration
-- Financial transactions
-- System operations
+Logs can be found in the default location for a docker container.
