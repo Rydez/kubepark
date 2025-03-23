@@ -66,9 +66,7 @@ func (c *Carousel) handleUse(w http.ResponseWriter, r *http.Request) {
 	// Simulate ride duration
 	time.Sleep(c.Config.Duration)
 
-	base.Metrics.Revenue.Add(c.Config.Fee)
 	base.Metrics.AttractionAttempts.WithLabelValues("true", "success").Inc()
-
 	w.WriteHeader(http.StatusOK)
 }
 

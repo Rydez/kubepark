@@ -67,9 +67,7 @@ func (r *Restroom) handleUse(w http.ResponseWriter, req *http.Request) {
 	// Simulate usage duration
 	time.Sleep(r.Config.Duration)
 
-	base.Metrics.Revenue.Add(r.Config.Fee)
 	base.Metrics.AttractionAttempts.WithLabelValues("true", "success").Inc()
-
 	w.WriteHeader(http.StatusOK)
 }
 

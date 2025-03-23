@@ -170,6 +170,8 @@ func (a *Attraction) PayPark() error {
 		return fmt.Errorf("payment failed with status: %d", resp.StatusCode)
 	}
 
+	Metrics.Revenue.Add(a.Config.Fee)
+
 	return nil
 }
 
