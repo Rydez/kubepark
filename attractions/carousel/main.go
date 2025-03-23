@@ -5,17 +5,17 @@ import (
 	"net/http"
 	"time"
 
-	"kubepark/pkg/attraction"
+	"kubepark/attractions/base"
 )
 
 // Carousel represents a carousel attraction
 type Carousel struct {
-	*attraction.Attraction
+	*base.Attraction
 }
 
 // New creates a new carousel attraction
 func New() *Carousel {
-	config := &attraction.Config{
+	config := &base.Config{
 		Name:       "carousel",
 		Duration:   3 * time.Second,
 		BuildCost:  20000,
@@ -24,8 +24,8 @@ func New() *Carousel {
 
 	defaultFee := 5.0
 
-	base := attraction.New(config, defaultFee)
-	carousel := &Carousel{Attraction: base}
+	attraction := base.New(config, defaultFee)
+	carousel := &Carousel{Attraction: attraction}
 
 	// Add the /use endpoint specific to the carousel
 	mainMux := carousel.MainServer.Handler.(*http.ServeMux)
@@ -42,7 +42,7 @@ func (c *Carousel) handleUse(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if c.Config.Closed {
-		attraction.Metrics.AttractionAttempts.WithLabelValues("false", "attraction_closed").Inc()
+		base.Metrics.AttractionAttempts.WithLabelValues("false", "attraction_closed").Inc()
 		http.Error(w, "Carousel is closed", http.StatusServiceUnavailable)
 		return
 	}
@@ -50,7 +50,7 @@ func (c *Carousel) handleUse(w http.ResponseWriter, r *http.Request) {
 	// Validate payment
 	_, err := c.ValidatePayment(w, r)
 	if err != nil {
-		attraction.Metrics.AttractionAttempts.WithLabelValues("false", "insufficient_funds").Inc()
+		base.Metrics.AttractionAttempts.WithLabelValues("false", "insufficient_funds").Inc()
 		http.Error(w, err.Error(), http.StatusPaymentRequired)
 		return
 	}
@@ -58,7 +58,7 @@ func (c *Carousel) handleUse(w http.ResponseWriter, r *http.Request) {
 	// Process payment with kubepark
 	if err := c.PayPark(); err != nil {
 		log.Printf("Failed to process payment: %v", err)
-		attraction.Metrics.AttractionAttempts.WithLabelValues("false", "payment_failed").Inc()
+		base.Metrics.AttractionAttempts.WithLabelValues("false", "payment_failed").Inc()
 		http.Error(w, "Payment failed", http.StatusInternalServerError)
 		return
 	}
@@ -66,8 +66,8 @@ func (c *Carousel) handleUse(w http.ResponseWriter, r *http.Request) {
 	// Simulate ride duration
 	time.Sleep(c.Config.Duration)
 
-	attraction.Metrics.Revenue.Add(c.Config.Fee)
-	attraction.Metrics.AttractionAttempts.WithLabelValues("true", "success").Inc()
+	base.Metrics.Revenue.Add(c.Config.Fee)
+	base.Metrics.AttractionAttempts.WithLabelValues("true", "success").Inc()
 
 	w.WriteHeader(http.StatusOK)
 }

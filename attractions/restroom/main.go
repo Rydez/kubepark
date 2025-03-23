@@ -5,17 +5,17 @@ import (
 	"net/http"
 	"time"
 
-	"kubepark/pkg/attraction"
+	"kubepark/attractions/base"
 )
 
 // Restroom represents a restroom attraction
 type Restroom struct {
-	*attraction.Attraction
+	*base.Attraction
 }
 
 // New creates a new restroom attraction
 func New() *Restroom {
-	config := &attraction.Config{
+	config := &base.Config{
 		Name:       "restroom",
 		Fee:        2,
 		Duration:   2 * time.Second,
@@ -25,8 +25,8 @@ func New() *Restroom {
 
 	defaultFee := 2.0
 
-	base := attraction.New(config, defaultFee)
-	restroom := &Restroom{Attraction: base}
+	attraction := base.New(config, defaultFee)
+	restroom := &Restroom{Attraction: attraction}
 
 	// Add the /use endpoint specific to the restroom
 	mainMux := restroom.MainServer.Handler.(*http.ServeMux)
@@ -43,7 +43,7 @@ func (r *Restroom) handleUse(w http.ResponseWriter, req *http.Request) {
 	}
 
 	if r.Config.Closed {
-		attraction.Metrics.AttractionAttempts.WithLabelValues("false", "attraction_closed").Inc()
+		base.Metrics.AttractionAttempts.WithLabelValues("false", "attraction_closed").Inc()
 		http.Error(w, "Restroom is closed", http.StatusServiceUnavailable)
 		return
 	}
@@ -51,7 +51,7 @@ func (r *Restroom) handleUse(w http.ResponseWriter, req *http.Request) {
 	// Validate payment
 	_, err := r.ValidatePayment(w, req)
 	if err != nil {
-		attraction.Metrics.AttractionAttempts.WithLabelValues("false", "insufficient_funds").Inc()
+		base.Metrics.AttractionAttempts.WithLabelValues("false", "insufficient_funds").Inc()
 		http.Error(w, err.Error(), http.StatusPaymentRequired)
 		return
 	}
@@ -59,7 +59,7 @@ func (r *Restroom) handleUse(w http.ResponseWriter, req *http.Request) {
 	// Process payment with kubepark
 	if err := r.PayPark(); err != nil {
 		log.Printf("Failed to process payment: %v", err)
-		attraction.Metrics.AttractionAttempts.WithLabelValues("false", "payment_failed").Inc()
+		base.Metrics.AttractionAttempts.WithLabelValues("false", "payment_failed").Inc()
 		http.Error(w, "Payment failed", http.StatusInternalServerError)
 		return
 	}
@@ -67,8 +67,8 @@ func (r *Restroom) handleUse(w http.ResponseWriter, req *http.Request) {
 	// Simulate usage duration
 	time.Sleep(r.Config.Duration)
 
-	attraction.Metrics.Revenue.Add(r.Config.Fee)
-	attraction.Metrics.AttractionAttempts.WithLabelValues("true", "success").Inc()
+	base.Metrics.Revenue.Add(r.Config.Fee)
+	base.Metrics.AttractionAttempts.WithLabelValues("true", "success").Inc()
 
 	w.WriteHeader(http.StatusOK)
 }

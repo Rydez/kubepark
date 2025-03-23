@@ -8,8 +8,6 @@ import (
 	"os"
 	"time"
 
-	"kubepark/pkg/state"
-
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -22,7 +20,7 @@ type Park struct {
 	Config        *Config
 	MetricsServer *http.Server
 	MainServer    *http.Server
-	State         *state.GameState
+	State         *GameState
 	GuestManager  *GuestJobManager
 }
 
@@ -38,7 +36,7 @@ func New() *Park {
 	}
 
 	// Initialize game state
-	gameState, err := state.New(config.VolumePath)
+	gameState, err := NewGameState(config.VolumePath)
 	if err != nil {
 		log.Fatalf("Failed to initialize game state: %v", err)
 	}

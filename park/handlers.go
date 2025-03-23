@@ -5,7 +5,6 @@ import (
 	"net/http"
 
 	"kubepark/pkg/httptypes"
-	"kubepark/pkg/state"
 )
 
 // handleIsPark handles requests to check if this is a park service
@@ -20,7 +19,7 @@ func handleIsPark() http.HandlerFunc {
 }
 
 // handlePayPark handles payment requests from attractions
-func handlePayPark(state *state.GameState) http.HandlerFunc {
+func handlePayPark(state *GameState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -40,7 +39,7 @@ func handlePayPark(state *state.GameState) http.HandlerFunc {
 }
 
 // handleEnterPark handles guest entry requests
-func handleEnterPark(state *state.GameState) http.HandlerFunc {
+func handleEnterPark(state *GameState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -76,7 +75,7 @@ func handleEnterPark(state *state.GameState) http.HandlerFunc {
 }
 
 // handleListAttractions returns a list of available attractions
-func handleListAttractions(state *state.GameState) http.HandlerFunc {
+func handleListAttractions(state *GameState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -98,7 +97,7 @@ func handleListAttractions(state *state.GameState) http.HandlerFunc {
 }
 
 // handleRegisterAttraction handles attraction registration requests
-func handleRegisterAttraction(state *state.GameState) http.HandlerFunc {
+func handleRegisterAttraction(state *GameState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -127,7 +126,7 @@ func handleRegisterAttraction(state *state.GameState) http.HandlerFunc {
 	}
 }
 
-func handleBreakAttraction(state *state.GameState) http.HandlerFunc {
+func handleBreakAttraction(state *GameState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)

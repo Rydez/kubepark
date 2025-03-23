@@ -1,4 +1,4 @@
-package attraction
+package base
 
 import (
 	"bytes"

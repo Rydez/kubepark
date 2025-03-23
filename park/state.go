@@ -1,4 +1,4 @@
-package state
+package main
 
 import (
 	"encoding/json"
@@ -39,7 +39,7 @@ type GameState struct {
 }
 
 // New creates a new game state manager
-func New(volumePath string) (*GameState, error) {
+func NewGameState(volumePath string) (*GameState, error) {
 	state := &GameState{
 		VolumePath:  volumePath,
 		CurrentTime: time.Now(),
