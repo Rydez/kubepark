@@ -72,11 +72,12 @@ func New() *Park {
 
 	// Create main server on port 80
 	mainMux := http.NewServeMux()
+	mainMux.HandleFunc("/is-park", handleIsPark())
 	mainMux.HandleFunc("/pay", handlePayPark(gameState))
 	mainMux.HandleFunc("/enter", handleEnterPark(gameState))
 	mainMux.HandleFunc("/attractions", handleListAttractions(gameState))
 	mainMux.HandleFunc("/register", handleRegisterAttraction(gameState))
-	mainMux.HandleFunc("/is-park", handleIsPark())
+	mainMux.HandleFunc("/break", handleBreakAttraction(gameState))
 	mainServer := &http.Server{
 		Addr:    ":80",
 		Handler: mainMux,
@@ -88,43 +89,6 @@ func New() *Park {
 		MainServer:    mainServer,
 		State:         gameState,
 		GuestManager:  guestManager,
-	}
-}
-
-// checkAttractionPending checks the status of all attractions and updates their pending state
-func (p *Park) checkAttractionPending() {
-	client := &http.Client{
-		Timeout: time.Second * 2,
-	}
-
-	for _, attraction := range p.State.GetAttractions() {
-		// Skip if we can't reach the attraction
-		resp, err := client.Get(attraction.URL + "/status")
-		if err != nil {
-			// If we can't reach the attraction and it's not pending, mark it as pending
-			if !attraction.IsPending {
-				if err := p.State.SetAttractionPending(attraction.URL, true); err != nil {
-					log.Printf("Failed to update attraction status: %v", err)
-				}
-			}
-			continue
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			// If we get an error response and it's not pending, mark it as pending
-			if !attraction.IsPending {
-				if err := p.State.SetAttractionPending(attraction.URL, true); err != nil {
-					log.Printf("Failed to update attraction status: %v", err)
-				}
-			}
-			continue
-		}
-
-		// Update the attraction's pending status
-		if err := p.State.SetAttractionPending(attraction.URL, false); err != nil {
-			log.Printf("Failed to update attraction status: %v", err)
-		}
 	}
 }
 
@@ -276,4 +240,41 @@ func checkForExistingPark() error {
 	}
 
 	return nil
+}
+
+// checkAttractionPending checks the status of all attractions and updates their pending state
+func (p *Park) checkAttractionPending() {
+	client := &http.Client{
+		Timeout: time.Second * 2,
+	}
+
+	for _, attraction := range p.State.GetAttractions() {
+		// Skip if we can't reach the attraction
+		resp, err := client.Get(attraction.URL + "/status")
+		if err != nil {
+			// If we can't reach the attraction and it's not pending, mark it as pending
+			if !attraction.IsPending {
+				if err := p.State.SetAttractionPending(attraction.URL, true); err != nil {
+					log.Printf("Failed to update attraction status: %v", err)
+				}
+			}
+			continue
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			// If we get an error response and it's not pending, mark it as pending
+			if !attraction.IsPending {
+				if err := p.State.SetAttractionPending(attraction.URL, true); err != nil {
+					log.Printf("Failed to update attraction status: %v", err)
+				}
+			}
+			continue
+		}
+
+		// Update the attraction's pending status
+		if err := p.State.SetAttractionPending(attraction.URL, false); err != nil {
+			log.Printf("Failed to update attraction status: %v", err)
+		}
+	}
 }

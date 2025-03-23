@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand/v2"
 	"net/http"
+	"time"
 
-	"kubepark/pkg/models"
+	"kubepark/pkg/httptypes"
 
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
@@ -68,7 +70,7 @@ func (a *Attraction) Register() error {
 		url = fmt.Sprintf("http://%s:80", a.Config.Name)
 	}
 
-	registrationData := models.RegisterAttractionRequest{
+	registrationData := httptypes.RegisterAttractionRequest{
 		URL:        url,
 		BuildCost:  a.Config.BuildCost,
 		RepairCost: a.Config.RepairCost,
@@ -107,6 +109,37 @@ func (a *Attraction) Start() error {
 		}
 	}()
 
+	// Start the attraction simulation loop
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+
+		for range ticker.C {
+			// Random chance to break the attraction (1% chance per second)
+			if rand.Float64() < 0.01 {
+				breakReq := httptypes.BreakAttractionRequest{
+					URL: a.Config.SelfURL,
+				}
+				breakData, err := json.Marshal(breakReq)
+				if err != nil {
+					log.Printf("Failed to marshal break request: %v", err)
+					continue
+				}
+
+				resp, err := http.Post(a.Config.ParkURL+"/break", "application/json", bytes.NewBuffer(breakData))
+				if err != nil {
+					log.Printf("Failed to send break request: %v", err)
+					continue
+				}
+				resp.Body.Close()
+
+				if resp.StatusCode == http.StatusOK {
+					log.Printf("Attraction %s has broken down", a.Config.Name)
+				}
+			}
+		}
+	}()
+
 	// Start main server
 	return a.MainServer.ListenAndServe()
 }
@@ -121,7 +154,7 @@ func (a *Attraction) Stop() error {
 
 // PayPark processes a payment with the park
 func (a *Attraction) PayPark() error {
-	paymentReq := models.PayParkRequest{Amount: a.Config.Fee}
+	paymentReq := httptypes.PayParkRequest{Amount: a.Config.Fee}
 	paymentData, err := json.Marshal(paymentReq)
 	if err != nil {
 		return err
@@ -142,7 +175,7 @@ func (a *Attraction) PayPark() error {
 
 // ValidatePayment validates if a guest has enough money to use the attraction
 func (a *Attraction) ValidatePayment(w http.ResponseWriter, r *http.Request) (float64, error) {
-	var useReq models.UseAttractionRequest
+	var useReq httptypes.UseAttractionRequest
 	if err := json.NewDecoder(r.Body).Decode(&useReq); err != nil {
 		return 0, fmt.Errorf("invalid payment request: %v", err)
 	}

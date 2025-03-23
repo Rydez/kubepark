@@ -1,8 +1,13 @@
-package models
+package httptypes
 
-// AttractionInfo represents the public information about an attraction
-type AttractionInfo struct {
+// Attraction is the info needed for guests to visit an attraction
+type Attraction struct {
 	URL string `json:"url"`
+}
+
+// ListAttractionsResponse list of attractions requested by the guest
+type ListAttractionsResponse struct {
+	Attractions []Attraction `json:"attractions"`
 }
 
 // RegisterAttractionRequest represents a request to register a new attraction
@@ -22,4 +27,15 @@ type RegisterAttractionResponse struct {
 // UseAttractionRequest represents a request to use the attraction
 type UseAttractionRequest struct {
 	GuestMoney float64 `json:"guest_money"`
+}
+
+// BreakAttractionRequest represents a request to break the attraction
+type BreakAttractionRequest struct {
+	URL string `json:"url"`
+}
+
+// BreakAttractionResponse represents the response from the break endpoint
+type BreakAttractionResponse struct {
+	Success bool   `json:"success"`
+	Message string `json:"message"`
 }

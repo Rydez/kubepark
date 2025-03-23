@@ -3,7 +3,7 @@ package state
 import (
 	"encoding/json"
 	"fmt"
-	"kubepark/pkg/models"
+	"kubepark/pkg/httptypes"
 	"os"
 	"path/filepath"
 	"sync"
@@ -176,7 +176,7 @@ func (s *GameState) IsClosed() bool {
 }
 
 // RegisterAttraction registers a new attraction with the park
-func (s *GameState) RegisterAttraction(req models.RegisterAttractionRequest) (bool, error) {
+func (s *GameState) RegisterAttraction(req httptypes.RegisterAttractionRequest) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 

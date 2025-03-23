@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	"kubepark/pkg/models"
+	"kubepark/pkg/httptypes"
 	"kubepark/pkg/state"
 )
 
@@ -27,7 +27,7 @@ func handlePayPark(state *state.GameState) http.HandlerFunc {
 			return
 		}
 
-		var req models.PayParkRequest
+		var req httptypes.PayParkRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
 			return
@@ -49,7 +49,7 @@ func handleEnterPark(state *state.GameState) http.HandlerFunc {
 
 		// Check if park is closed
 		if state.IsClosed() {
-			json.NewEncoder(w).Encode(models.EnterParkResponse{
+			json.NewEncoder(w).Encode(httptypes.EnterParkResponse{
 				Success: false,
 				Message: "Park is closed",
 			})
@@ -58,7 +58,7 @@ func handleEnterPark(state *state.GameState) http.HandlerFunc {
 
 		// Check if park is at capacity
 		if !state.CanAddGuest() {
-			json.NewEncoder(w).Encode(models.EnterParkResponse{
+			json.NewEncoder(w).Encode(httptypes.EnterParkResponse{
 				Success: false,
 				Message: "Park is at capacity",
 			})
@@ -68,7 +68,7 @@ func handleEnterPark(state *state.GameState) http.HandlerFunc {
 		// Process entrance fee
 		state.AddMoney(state.EntranceFee)
 
-		json.NewEncoder(w).Encode(models.EnterParkResponse{
+		json.NewEncoder(w).Encode(httptypes.EnterParkResponse{
 			Success: true,
 			Message: "Welcome to the park!",
 		})
@@ -83,17 +83,17 @@ func handleListAttractions(state *state.GameState) http.HandlerFunc {
 			return
 		}
 
+		data := httptypes.ListAttractionsResponse{}
 		attractionStates := state.GetAttractions()
-		attractions := make([]models.AttractionInfo, 0, len(attractionStates))
 		for _, attractionState := range attractionStates {
 			if attractionState.IsRepaired && !attractionState.IsPending {
-				attractions = append(attractions, models.AttractionInfo{
+				data.Attractions = append(data.Attractions, httptypes.Attraction{
 					URL: attractionState.URL,
 				})
 			}
 		}
 
-		json.NewEncoder(w).Encode(attractions)
+		json.NewEncoder(w).Encode(data)
 	}
 }
 
@@ -105,7 +105,7 @@ func handleRegisterAttraction(state *state.GameState) http.HandlerFunc {
 			return
 		}
 
-		var req models.RegisterAttractionRequest
+		var req httptypes.RegisterAttractionRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
 			return
@@ -113,16 +113,42 @@ func handleRegisterAttraction(state *state.GameState) http.HandlerFunc {
 
 		success, err := state.RegisterAttraction(req)
 		if err != nil {
-			json.NewEncoder(w).Encode(models.RegisterAttractionResponse{
+			json.NewEncoder(w).Encode(httptypes.RegisterAttractionResponse{
 				Success: false,
 				Message: err.Error(),
 			})
 			return
 		}
 
-		json.NewEncoder(w).Encode(models.RegisterAttractionResponse{
+		json.NewEncoder(w).Encode(httptypes.RegisterAttractionResponse{
 			Success: success,
 			Message: "Attraction registered successfully",
+		})
+	}
+}
+
+func handleBreakAttraction(state *state.GameState) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		var req httptypes.BreakAttractionRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		err := state.MarkAttractionBroken(req.URL)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		json.NewEncoder(w).Encode(httptypes.BreakAttractionResponse{
+			Success: true,
+			Message: "Attraction broken",
 		})
 	}
 }

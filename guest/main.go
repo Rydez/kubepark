@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"kubepark/pkg/models"
+	"kubepark/pkg/httptypes"
 	"log"
 	"math/rand"
 	"net/http"
@@ -154,7 +154,7 @@ func visitAttraction() error {
 	randAttraction := attractions[rand.Intn(len(attractions))]
 
 	// Create use request with remaining money
-	useReq := models.UseAttractionRequest{
+	useReq := httptypes.UseAttractionRequest{
 		GuestMoney: config.Money,
 	}
 	useData, err := json.Marshal(useReq)

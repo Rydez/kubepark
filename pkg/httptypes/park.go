@@ -1,4 +1,4 @@
-package models
+package httptypes
 
 // EnterParkResponse represents the response from the enter endpoint
 type EnterParkResponse struct {
