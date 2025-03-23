@@ -13,7 +13,6 @@ type Config struct {
 	EntranceFee float64
 	OpensAt     int
 	ClosesAt    int
-	Namespace   string
 }
 
 func RegisterFlags(config *Config) {
@@ -24,6 +23,5 @@ func RegisterFlags(config *Config) {
 	flag.Float64Var(&config.EntranceFee, "entrance-fee", 10, "Entrance fee for the park")
 	flag.IntVar(&config.OpensAt, "opens-at", 8, "Hour at which the park opens")
 	flag.IntVar(&config.ClosesAt, "closes-at", 20, "Hour at which the park closes")
-	flag.StringVar(&config.Namespace, "namespace", "default", "Kubernetes namespace for guest jobs")
 	flag.Parse()
 }

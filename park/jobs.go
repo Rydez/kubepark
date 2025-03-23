@@ -3,7 +3,6 @@ package main
 import (
 	"context"
 	"fmt"
-	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -15,11 +14,10 @@ import (
 // GuestJobManager manages Kubernetes jobs for park guests
 type GuestJobManager struct {
 	clientset *kubernetes.Clientset
-	namespace string
 }
 
 // NewGuestJobManager creates a new guest job manager
-func NewGuestJobManager(namespace string) (*GuestJobManager, error) {
+func NewGuestJobManager() (*GuestJobManager, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get in-cluster config: %w", err)
@@ -32,7 +30,6 @@ func NewGuestJobManager(namespace string) (*GuestJobManager, error) {
 
 	return &GuestJobManager{
 		clientset: clientset,
-		namespace: namespace,
 	}, nil
 }
 
@@ -62,7 +59,7 @@ func (m *GuestJobManager) CreateGuestJob(ctx context.Context, parkURL string) er
 		},
 	}
 
-	_, err := m.clientset.BatchV1().Jobs(m.namespace).Create(ctx, job, metav1.CreateOptions{})
+	_, err := m.clientset.BatchV1().Jobs("guests").Create(ctx, job, metav1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to create guest job: %w", err)
 	}
@@ -70,22 +67,17 @@ func (m *GuestJobManager) CreateGuestJob(ctx context.Context, parkURL string) er
 	return nil
 }
 
-// CleanupOldJobs removes completed or failed jobs older than 1 hour
-func (m *GuestJobManager) CleanupOldJobs(ctx context.Context) error {
-	jobs, err := m.clientset.BatchV1().Jobs(m.namespace).List(ctx, metav1.ListOptions{})
+// CleanupJobs removes all jobs
+func (m *GuestJobManager) CleanupJobs(ctx context.Context) error {
+	jobs, err := m.clientset.BatchV1().Jobs("guests").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to list jobs: %w", err)
 	}
 
-	cutoff := time.Now().Add(-1 * time.Hour)
 	for _, job := range jobs.Items {
-		if job.Status.Succeeded == 1 || job.Status.Failed == 1 {
-			if job.Status.CompletionTime != nil && job.Status.CompletionTime.Time.Before(cutoff) {
-				err := m.clientset.BatchV1().Jobs(m.namespace).Delete(ctx, job.Name, metav1.DeleteOptions{})
-				if err != nil {
-					return fmt.Errorf("failed to delete job %s: %w", job.Name, err)
-				}
-			}
+		err := m.clientset.BatchV1().Jobs("guests").Delete(ctx, job.Name, metav1.DeleteOptions{})
+		if err != nil {
+			return fmt.Errorf("failed to delete job %s: %w", job.Name, err)
 		}
 	}
 

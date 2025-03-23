@@ -49,7 +49,7 @@ func New() *Park {
 	gameState.SetClosed(config.Closed)
 
 	// Initialize guest job manager
-	guestManager, err := NewGuestJobManager(config.Namespace)
+	guestManager, err := NewGuestJobManager()
 	if err != nil {
 		log.Fatalf("Failed to initialize guest job manager: %v", err)
 	}
@@ -107,9 +107,12 @@ func (p *Park) Start() error {
 		ctx := context.Background()
 
 		for range ticker.C {
+			// Speed up simulation time
+			p.State.SetTime(p.State.GetTime().Add(time.Second * 10))
+
 			// Update metrics
-			metrics.Money.Set(p.State.GetMoney())
 			metrics.Time.Set(float64(p.State.GetTime().Unix()))
+			metrics.Money.Set(p.State.GetMoney())
 
 			// Save state every minute
 			if time.Since(p.State.GetTime()) > time.Minute {
@@ -131,9 +134,13 @@ func (p *Park) Start() error {
 				log.Printf("Failed to create guest job: %v", err)
 			}
 
-			// Cleanup old guest jobs
-			if err := p.GuestManager.CleanupOldJobs(ctx); err != nil {
-				log.Printf("Failed to cleanup old jobs: %v", err)
+			// Check if park is within business hours
+			currentHour := p.State.GetTime().Hour()
+			if currentHour < p.Config.OpensAt || currentHour >= p.Config.ClosesAt {
+				// Park is closed, cleanup all guest jobs
+				if err := p.GuestManager.CleanupJobs(ctx); err != nil {
+					log.Printf("Failed to cleanup all jobs during closed hours: %v", err)
+				}
 			}
 		}
 	}()

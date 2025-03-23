@@ -27,11 +27,6 @@ var (
 		Help: "Number of attractions visited",
 	})
 
-	TimeSpent = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "time_spent",
-		Help: "Total time spent in the park (in seconds)",
-	})
-
 	// Configuration
 	config struct {
 		ParkURL   string
@@ -57,7 +52,6 @@ func init() {
 	// Register metrics
 	prometheus.MustRegister(MoneySpent)
 	prometheus.MustRegister(AttractionsVisited)
-	prometheus.MustRegister(TimeSpent)
 
 	// Parse flags
 	flag.StringVar(&config.ParkURL, "park-url", "http://kubepark:80", "URL of the kubepark service")
@@ -88,8 +82,7 @@ func main() {
 	}
 
 	// Start exploring attractions
-	startTime := time.Now()
-	for time.Since(startTime) < 12*time.Hour {
+	for {
 		// Check if park is still open
 		if time.Now().After(config.EndTime) {
 			log.Println("Park is closed, leaving")
@@ -101,15 +94,17 @@ func main() {
 			log.Printf("Failed to visit attraction: %v", err)
 		}
 
-		// Update metrics
-		TimeSpent.Add(time.Since(startTime).Seconds())
+		// Random chance (30%) that guest decides to leave early
+		if rand.Float64() < 0.30 {
+			log.Println("Guest decided to leave early")
+			break
+		}
 
 		// Take a break between attractions
 		time.Sleep(time.Duration(rand.Intn(30)+30) * time.Second)
 	}
 
-	log.Printf("Guest finished their visit. Time spent: %v, Attractions visited: %d",
-		time.Since(startTime), AttractionsVisited)
+	log.Printf("Guest finished their visit. Attractions visited: %d", AttractionsVisited)
 }
 
 func enterPark() error {

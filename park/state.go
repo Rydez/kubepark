@@ -44,7 +44,7 @@ func NewGameState(volumePath string) (*GameState, error) {
 		VolumePath:  volumePath,
 		CurrentTime: time.Now(),
 		LastSaved:   time.Now(),
-		Money:       1000, // Starting cash
+		Money:       100000, // Starting cash
 		Attractions: make(map[string]AttractionState),
 		GuestSize:   0.05, // Each guest takes 0.1 acres
 	}
@@ -159,6 +159,13 @@ func (s *GameState) GetTime() time.Time {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.CurrentTime
+}
+
+// SetTime sets the park's current time
+func (s *GameState) SetTime(t time.Time) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.CurrentTime = t
 }
 
 // SetClosed sets whether the park is closed
