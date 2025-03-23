@@ -28,10 +28,11 @@ Every component in kubepark exposes:
 
 ## 🚀 Getting Started
 
-1. Head to the [kubepark](./park) directory to launch the park simulator
+1. Head to the [park](./park) directory to launch the park simulator
 2. Explore the [attractions](./attractions) directory to deploy rides and amenities
-3. Monitor your park's performance using tools like Grafana
-4. Optimize your park based on insights from logs and metrics
+3. Explore the [guest](./guest) directory to learn more about how guests will interact with your park
+4. Monitor your park using tools like Grafana
+5. Optimize your park based on insights from logs and metrics
 
 ## 🔒 Remember
 
