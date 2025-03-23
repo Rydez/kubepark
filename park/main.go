@@ -26,15 +26,184 @@ type Park struct {
 	GuestManager  *GuestJobManager
 }
 
-// handleIsPark handles requests to check if this is a park service
-func handleIsPark() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
+// New creates a new park simulator
+func New() *Park {
+	config := &Config{}
+
+	RegisterFlags(config)
+
+	// Check for existing park service
+	if err := checkForExistingPark(); err != nil {
+		log.Fatalf("Failed park check: %v", err)
 	}
+
+	// Initialize game state
+	gameState, err := state.New(config.VolumePath)
+	if err != nil {
+		log.Fatalf("Failed to initialize game state: %v", err)
+	}
+
+	// Update state with config values
+	gameState.Mode = config.Mode
+	gameState.EntranceFee = config.EntranceFee
+	gameState.OpensAt = config.OpensAt
+	gameState.ClosesAt = config.ClosesAt
+	gameState.SetClosed(config.Closed)
+
+	// Initialize guest job manager
+	guestManager, err := NewGuestJobManager(config.Namespace)
+	if err != nil {
+		log.Fatalf("Failed to initialize guest job manager: %v", err)
+	}
+
+	RegisterParkMetrics()
+	metrics.EntranceFee.Set(config.EntranceFee)
+	metrics.IsParkClosed.Set(btof(config.Closed))
+	metrics.OpensAt.Set(float64(config.OpensAt))
+	metrics.ClosesAt.Set(float64(config.ClosesAt))
+
+	// Create metrics server on port 9000
+	metricsMux := http.NewServeMux()
+	metricsMux.HandleFunc("/metrics", promhttp.Handler().ServeHTTP)
+	metricsServer := &http.Server{
+		Addr:    ":9000",
+		Handler: metricsMux,
+	}
+
+	// Create main server on port 80
+	mainMux := http.NewServeMux()
+	mainMux.HandleFunc("/pay", handlePayPark(gameState))
+	mainMux.HandleFunc("/enter", handleEnterPark(gameState))
+	mainMux.HandleFunc("/attractions", handleListAttractions(gameState))
+	mainMux.HandleFunc("/register", handleRegisterAttraction(gameState))
+	mainMux.HandleFunc("/is-park", handleIsPark())
+	mainServer := &http.Server{
+		Addr:    ":80",
+		Handler: mainMux,
+	}
+
+	return &Park{
+		Config:        config,
+		MetricsServer: metricsServer,
+		MainServer:    mainServer,
+		State:         gameState,
+		GuestManager:  guestManager,
+	}
+}
+
+// checkAttractionPending checks the status of all attractions and updates their pending state
+func (p *Park) checkAttractionPending() {
+	client := &http.Client{
+		Timeout: time.Second * 2,
+	}
+
+	for _, attraction := range p.State.GetAttractions() {
+		// Skip if we can't reach the attraction
+		resp, err := client.Get(attraction.URL + "/status")
+		if err != nil {
+			// If we can't reach the attraction and it's not pending, mark it as pending
+			if !attraction.IsPending {
+				if err := p.State.SetAttractionPending(attraction.URL, true); err != nil {
+					log.Printf("Failed to update attraction status: %v", err)
+				}
+			}
+			continue
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			// If we get an error response and it's not pending, mark it as pending
+			if !attraction.IsPending {
+				if err := p.State.SetAttractionPending(attraction.URL, true); err != nil {
+					log.Printf("Failed to update attraction status: %v", err)
+				}
+			}
+			continue
+		}
+
+		// Update the attraction's pending status
+		if err := p.State.SetAttractionPending(attraction.URL, false); err != nil {
+			log.Printf("Failed to update attraction status: %v", err)
+		}
+	}
+}
+
+// Start starts the park simulator
+func (p *Park) Start() error {
+	// Start the metrics server
+	go func() {
+		if err := p.MetricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal(err)
+		}
+	}()
+
+	// Start the park simulation loop
+	go func() {
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+
+		ctx := context.Background()
+
+		for range ticker.C {
+			// Update metrics
+			metrics.Money.Set(p.State.GetMoney())
+			metrics.Time.Set(float64(p.State.GetTime().Unix()))
+
+			// Save state every minute
+			if time.Since(p.State.GetTime()) > time.Minute {
+				if err := p.State.Save(); err != nil {
+					log.Printf("Failed to save state: %v", err)
+				}
+			}
+
+			// Check attraction statuses
+			p.checkAttractionPending()
+
+			// Create new guests if park is open and not at capacity
+			url := p.Config.SelfURL
+			if url == "" {
+				url = "http://park:80"
+			}
+
+			if err := p.GuestManager.CreateGuestJob(ctx, url); err != nil {
+				log.Printf("Failed to create guest job: %v", err)
+			}
+
+			// Cleanup old guest jobs
+			if err := p.GuestManager.CleanupOldJobs(ctx); err != nil {
+				log.Printf("Failed to cleanup old jobs: %v", err)
+			}
+		}
+	}()
+
+	// Start the main server
+	return p.MainServer.ListenAndServe()
+}
+
+// Stop gracefully stops the park simulator
+func (p *Park) Stop() error {
+	// Save final state
+	if err := p.State.Save(); err != nil {
+		log.Printf("Failed to save final state: %v", err)
+	}
+
+	if err := p.MetricsServer.Close(); err != nil {
+		return err
+	}
+	return p.MainServer.Close()
+}
+
+// btof converts a bool to a float64 (0 or 1)
+func btof(b bool) float64 {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+func main() {
+	park := New()
+	log.Fatal(park.Start())
 }
 
 // checkForExistingPark checks if another park service exists in the cluster
@@ -107,142 +276,4 @@ func checkForExistingPark() error {
 	}
 
 	return nil
-}
-
-// New creates a new park simulator
-func New() *Park {
-	config := &Config{}
-
-	RegisterFlags(config)
-
-	// Check for existing park service
-	if err := checkForExistingPark(); err != nil {
-		log.Fatalf("Failed park check: %v", err)
-	}
-
-	// Initialize game state
-	gameState, err := state.New(config.VolumePath)
-	if err != nil {
-		log.Fatalf("Failed to initialize game state: %v", err)
-	}
-
-	// Update state with config values
-	gameState.Mode = config.Mode
-	gameState.EntranceFee = config.EntranceFee
-	gameState.OpensAt = config.OpensAt
-	gameState.ClosesAt = config.ClosesAt
-	gameState.SetClosed(config.Closed)
-
-	// Initialize guest job manager
-	guestManager, err := NewGuestJobManager(config.Namespace)
-	if err != nil {
-		log.Fatalf("Failed to initialize guest job manager: %v", err)
-	}
-
-	RegisterParkMetrics()
-	metrics.EntranceFee.Set(config.EntranceFee)
-	metrics.IsParkClosed.Set(btof(config.Closed))
-	metrics.OpensAt.Set(float64(config.OpensAt))
-	metrics.ClosesAt.Set(float64(config.ClosesAt))
-
-	// Create metrics server on port 9000
-	metricsMux := http.NewServeMux()
-	metricsMux.HandleFunc("/metrics", promhttp.Handler().ServeHTTP)
-	metricsServer := &http.Server{
-		Addr:    ":9000",
-		Handler: metricsMux,
-	}
-
-	// Create main server on port 80
-	mainMux := http.NewServeMux()
-	mainMux.HandleFunc("/pay", handlePayPark(gameState))
-	mainMux.HandleFunc("/enter", handleEnterPark(gameState))
-	mainMux.HandleFunc("/attractions", handleListAttractions(gameState))
-	mainMux.HandleFunc("/register", handleRegisterAttraction(gameState))
-	mainMux.HandleFunc("/is-park", handleIsPark())
-	mainServer := &http.Server{
-		Addr:    ":80",
-		Handler: mainMux,
-	}
-
-	return &Park{
-		Config:        config,
-		MetricsServer: metricsServer,
-		MainServer:    mainServer,
-		State:         gameState,
-		GuestManager:  guestManager,
-	}
-}
-
-// Start starts the park simulator
-func (p *Park) Start() error {
-	// Start the metrics server
-	go func() {
-		if err := p.MetricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal(err)
-		}
-	}()
-
-	// Start the park simulation loop
-	go func() {
-		ticker := time.NewTicker(time.Second)
-		defer ticker.Stop()
-
-		ctx := context.Background()
-
-		for range ticker.C {
-			// Update metrics
-			metrics.Money.Set(p.State.GetMoney())
-			metrics.Time.Set(float64(p.State.GetTime().Unix()))
-
-			// Save state every minute
-			if time.Since(p.State.GetTime()) > time.Minute {
-				if err := p.State.Save(); err != nil {
-					log.Printf("Failed to save state: %v", err)
-				}
-			}
-
-			// Create new guests if park is open and not at capacity
-			if !p.State.IsClosed() {
-				// TODO: Add capacity check based on mode
-				if err := p.GuestManager.CreateGuestJob(ctx, "http://kubepark:80"); err != nil {
-					log.Printf("Failed to create guest job: %v", err)
-				}
-			}
-
-			// Cleanup old guest jobs
-			if err := p.GuestManager.CleanupOldJobs(ctx); err != nil {
-				log.Printf("Failed to cleanup old jobs: %v", err)
-			}
-		}
-	}()
-
-	// Start the main server
-	return p.MainServer.ListenAndServe()
-}
-
-// Stop gracefully stops the park simulator
-func (p *Park) Stop() error {
-	// Save final state
-	if err := p.State.Save(); err != nil {
-		log.Printf("Failed to save final state: %v", err)
-	}
-
-	if err := p.MetricsServer.Close(); err != nil {
-		return err
-	}
-	return p.MainServer.Close()
-}
-
-// btof converts a bool to a float64 (0 or 1)
-func btof(b bool) float64 {
-	if b {
-		return 1
-	}
-	return 0
-}
-
-func main() {
-	park := New()
-	log.Fatal(park.Start())
 }

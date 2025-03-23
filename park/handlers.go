@@ -8,6 +8,17 @@ import (
 	"kubepark/pkg/state"
 )
 
+// handleIsPark handles requests to check if this is a park service
+func handleIsPark() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
 // handlePayPark handles payment requests from attractions
 func handlePayPark(state *state.GameState) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -45,6 +56,15 @@ func handleEnterPark(state *state.GameState) http.HandlerFunc {
 			return
 		}
 
+		// Check if park is at capacity
+		if !state.CanAddGuest() {
+			json.NewEncoder(w).Encode(models.EnterParkResponse{
+				Success: false,
+				Message: "Park is at capacity",
+			})
+			return
+		}
+
 		// Process entrance fee
 		state.AddMoney(state.EntranceFee)
 
@@ -66,7 +86,7 @@ func handleListAttractions(state *state.GameState) http.HandlerFunc {
 		attractionStates := state.GetAttractions()
 		attractions := make([]models.AttractionInfo, 0, len(attractionStates))
 		for _, attractionState := range attractionStates {
-			if attractionState.IsRepaired {
+			if attractionState.IsRepaired && !attractionState.IsPending {
 				attractions = append(attractions, models.AttractionInfo{
 					URL: attractionState.URL,
 				})

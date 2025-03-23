@@ -12,10 +12,12 @@ import (
 
 // AttractionState represents the state of an attraction
 type AttractionState struct {
-	URL        string `json:"url"`
-	BuildCost  int    `json:"build_cost"`
-	RepairCost int    `json:"repair_cost"`
-	IsRepaired bool   `json:"is_repaired"`
+	URL        string  `json:"url"`
+	BuildCost  int     `json:"build_cost"`
+	RepairCost int     `json:"repair_cost"`
+	IsRepaired bool    `json:"is_repaired"`
+	Size       float64 `json:"size"`       // Size in acres
+	IsPending  bool    `json:"is_pending"` // Whether the attraction is pending deployment
 }
 
 // GameState represents the current state of the park
@@ -30,6 +32,9 @@ type GameState struct {
 	Closed      bool                       `json:"closed"`
 	Attractions map[string]AttractionState `json:"attractions"` // key is URL
 	VolumePath  string                     `json:"-"`
+	TotalSpace  float64                    `json:"total_space"` // Total park space in acres
+	UsedSpace   float64                    `json:"used_space"`  // Used space in acres
+	GuestSize   float64                    `json:"guest_size"`  // Size of each guest in acres
 	mu          sync.RWMutex
 }
 
@@ -41,6 +46,19 @@ func New(volumePath string) (*GameState, error) {
 		LastSaved:   time.Now(),
 		Money:       1000, // Starting cash
 		Attractions: make(map[string]AttractionState),
+		GuestSize:   0.05, // Each guest takes 0.1 acres
+	}
+
+	// Set total space based on mode
+	switch state.Mode {
+	case "easy":
+		state.TotalSpace = 300
+	case "medium":
+		state.TotalSpace = 100
+	case "hard":
+		state.TotalSpace = 10
+	default:
+		return nil, fmt.Errorf("mode not set on park")
 	}
 
 	// Try to load existing state if volume path is provided
@@ -48,7 +66,7 @@ func New(volumePath string) (*GameState, error) {
 		if err := state.Load(); err != nil {
 			// If file doesn't exist, that's fine - we'll create it on first save
 			if !os.IsNotExist(err) {
-				return nil, fmt.Errorf("failed to load state: %w", err)
+				return nil, fmt.Errorf("failed to load state: %v", err)
 			}
 		}
 	}
@@ -157,7 +175,7 @@ func (s *GameState) IsClosed() bool {
 	return s.Closed
 }
 
-// RegisterAttraction registers a new attraction or updates an existing one
+// RegisterAttraction registers a new attraction with the park
 func (s *GameState) RegisterAttraction(req models.RegisterAttractionRequest) (bool, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -177,15 +195,107 @@ func (s *GameState) RegisterAttraction(req models.RegisterAttractionRequest) (bo
 		s.Money -= float64(req.BuildCost)
 	}
 
-	// Update or create the attraction state
+	// Check if we have enough space
+	if s.UsedSpace+req.Size > s.TotalSpace {
+		return false, fmt.Errorf("not enough space in park. Need %.1f acres but only have %.1f acres available", req.Size, s.TotalSpace-s.UsedSpace)
+	}
+	s.UsedSpace += req.Size
+
+	// Add attraction to state
 	s.Attractions[req.URL] = AttractionState{
 		URL:        req.URL,
 		BuildCost:  req.BuildCost,
 		RepairCost: req.RepairCost,
 		IsRepaired: true,
+		Size:       req.Size,
+		IsPending:  true,
 	}
 
 	return true, nil
+}
+
+// SetAttractionPending updates the pending status of an attraction
+func (s *GameState) SetAttractionPending(url string, isPending bool) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	attraction, exists := s.Attractions[url]
+	if !exists {
+		return fmt.Errorf("attraction not found")
+	}
+
+	// If status is changing from pending to not pending, check space
+	if !isPending && attraction.IsPending {
+		if s.UsedSpace+attraction.Size > s.TotalSpace {
+			return fmt.Errorf("not enough space in park. Need %.1f acres but only have %.1f acres available", attraction.Size, s.TotalSpace-s.UsedSpace)
+		}
+		s.UsedSpace += attraction.Size
+	} else if isPending && !attraction.IsPending {
+		s.UsedSpace -= attraction.Size
+	}
+
+	attraction.IsPending = isPending
+	s.Attractions[url] = attraction
+	return nil
+}
+
+// RemoveAttraction removes an attraction from the park
+func (s *GameState) RemoveAttraction(url string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	attraction, exists := s.Attractions[url]
+	if !exists {
+		return fmt.Errorf("attraction not found")
+	}
+
+	if !attraction.IsPending {
+		s.UsedSpace -= attraction.Size
+	}
+
+	delete(s.Attractions, url)
+	return nil
+}
+
+// CanAddGuest checks if there's enough space for a new guest
+func (s *GameState) CanAddGuest() bool {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.UsedSpace+s.GuestSize <= s.TotalSpace
+}
+
+// AddGuest adds a guest to the park
+func (s *GameState) AddGuest() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if s.UsedSpace+s.GuestSize > s.TotalSpace {
+		return fmt.Errorf("not enough space in park for guest. Need %.1f acres but only have %.1f acres available", s.GuestSize, s.TotalSpace-s.UsedSpace)
+	}
+
+	s.UsedSpace += s.GuestSize
+	return nil
+}
+
+// RemoveGuest removes a guest from the park
+func (s *GameState) RemoveGuest() {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.UsedSpace -= s.GuestSize
+}
+
+// GetAvailableSpace returns the amount of space available in the park
+func (s *GameState) GetAvailableSpace() float64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.TotalSpace - s.UsedSpace
+}
+
+// GetTotalSpace returns the total space in the park
+func (s *GameState) GetTotalSpace() float64 {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return s.TotalSpace
 }
 
 // GetAttractions returns a list of all attractions

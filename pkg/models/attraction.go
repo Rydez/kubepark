@@ -7,9 +7,10 @@ type AttractionInfo struct {
 
 // RegisterAttractionRequest represents a request to register a new attraction
 type RegisterAttractionRequest struct {
-	URL        string `json:"url"`
-	BuildCost  int    `json:"build_cost"`
-	RepairCost int    `json:"repair_cost"`
+	URL        string  `json:"url"`
+	BuildCost  int     `json:"build_cost"`
+	RepairCost int     `json:"repair_cost"`
+	Size       float64 `json:"size"` // Size in acres
 }
 
 // RegisterAttractionResponse represents the response from the register endpoint

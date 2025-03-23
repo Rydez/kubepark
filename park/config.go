@@ -6,6 +6,7 @@ import (
 
 // Config represents the park configuration
 type Config struct {
+	SelfURL     string
 	Mode        string
 	VolumePath  string
 	Closed      bool
@@ -16,6 +17,7 @@ type Config struct {
 }
 
 func RegisterFlags(config *Config) {
+	flag.StringVar(&config.SelfURL, "self-url", "", "URL where this attraction can be reached")
 	flag.StringVar(&config.Mode, "mode", "easy", "Game mode (easy, medium, hard)")
 	flag.StringVar(&config.VolumePath, "volume", "", "Path to volume for persistent storage")
 	flag.BoolVar(&config.Closed, "closed", false, "Whether the park is closed")

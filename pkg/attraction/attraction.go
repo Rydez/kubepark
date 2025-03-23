@@ -36,9 +36,11 @@ func New(config *Config, defaultFee float64) *Attraction {
 	}
 
 	// Create main server on port 80
+	mainMux := http.NewServeMux()
+	mainMux.HandleFunc("/status", handleStatus())
 	mainServer := &http.Server{
 		Addr:    ":80",
-		Handler: http.NewServeMux(),
+		Handler: mainMux,
 	}
 
 	return &Attraction{
@@ -48,12 +50,29 @@ func New(config *Config, defaultFee float64) *Attraction {
 	}
 }
 
+// handleStatus handles the status endpoint
+func handleStatus() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}
+}
+
 // Register registers the attraction with kubepark
 func (a *Attraction) Register() error {
+	url := a.Config.SelfURL
+	if url == "" {
+		url = fmt.Sprintf("http://%s:80", a.Config.Name)
+	}
+
 	registrationData := models.RegisterAttractionRequest{
-		URL:        fmt.Sprintf("http://%s:80", a.Config.Name),
+		URL:        url,
 		BuildCost:  a.Config.BuildCost,
 		RepairCost: a.Config.RepairCost,
+		Size:       a.Config.Size,
 	}
 	data, err := json.Marshal(registrationData)
 	if err != nil {
@@ -70,7 +89,7 @@ func (a *Attraction) Register() error {
 		return fmt.Errorf("registration failed with status: %d", resp.StatusCode)
 	}
 
-	log.Printf("Successfully registered %s with kubepark", a.Config.Name)
+	log.Printf("Successfully registered %s with kubepark at %s", a.Config.Name, url)
 	return nil
 }
 
