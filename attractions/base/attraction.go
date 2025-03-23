@@ -22,7 +22,7 @@ type Attraction struct {
 }
 
 // New creates a new base attraction
-func New(config *Config, defaultFee float64) *Attraction {
+func New(config *Config, defaultFee float64, afterUse func() error) *Attraction {
 	RegisterFlags(config, defaultFee)
 
 	RegisterAttractionMetrics()
@@ -40,6 +40,7 @@ func New(config *Config, defaultFee float64) *Attraction {
 	// Create main server on port 80
 	mainMux := http.NewServeMux()
 	mainMux.HandleFunc("/status", handleStatus())
+	mainMux.HandleFunc("/use", handleUse(config, afterUse))
 	mainServer := &http.Server{
 		Addr:    ":80",
 		Handler: mainMux,
@@ -153,14 +154,14 @@ func (a *Attraction) Stop() error {
 }
 
 // PayPark processes a payment with the park
-func (a *Attraction) PayPark() error {
-	paymentReq := httptypes.PayParkRequest{Amount: a.Config.Fee}
+func PayPark(w http.ResponseWriter, r *http.Request, config *Config) error {
+	paymentReq := httptypes.PayParkRequest{Amount: config.Fee}
 	paymentData, err := json.Marshal(paymentReq)
 	if err != nil {
 		return err
 	}
 
-	resp, err := http.Post(a.Config.ParkURL+"/pay", "application/json", bytes.NewBuffer(paymentData))
+	resp, err := http.Post(config.ParkURL+"/pay", "application/json", bytes.NewBuffer(paymentData))
 	if err != nil {
 		return err
 	}
@@ -170,20 +171,20 @@ func (a *Attraction) PayPark() error {
 		return fmt.Errorf("payment failed with status: %d", resp.StatusCode)
 	}
 
-	Metrics.Revenue.Add(a.Config.Fee)
+	Metrics.Revenue.Add(config.Fee)
 
 	return nil
 }
 
 // ValidatePayment validates if a guest has enough money to use the attraction
-func (a *Attraction) ValidatePayment(w http.ResponseWriter, r *http.Request) (float64, error) {
+func ValidatePayment(w http.ResponseWriter, r *http.Request, config *Config) (float64, error) {
 	var useReq httptypes.UseAttractionRequest
 	if err := json.NewDecoder(r.Body).Decode(&useReq); err != nil {
 		return 0, fmt.Errorf("invalid payment request: %v", err)
 	}
 
-	if useReq.GuestMoney < a.Config.Fee {
-		return 0, fmt.Errorf("insufficient funds. Fee is $%.2f but guest has $%.2f", a.Config.Fee, useReq.GuestMoney)
+	if useReq.GuestMoney < config.Fee {
+		return 0, fmt.Errorf("insufficient funds. Fee is $%.2f but guest has $%.2f", config.Fee, useReq.GuestMoney)
 	}
 
 	return useReq.GuestMoney, nil
@@ -195,4 +196,52 @@ func btof(b bool) float64 {
 		return 1
 	}
 	return 0
+}
+
+// HandleUse handles the common use endpoint functionality
+func handleUse(config *Config, afterUse func() error) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		if config.Closed {
+			Metrics.AttractionAttempts.WithLabelValues("false", "attraction_closed").Inc()
+			http.Error(w, fmt.Sprintf("%s is closed", config.Name), http.StatusServiceUnavailable)
+			return
+		}
+
+		// Validate payment
+		_, err := ValidatePayment(w, r, config)
+		if err != nil {
+			Metrics.AttractionAttempts.WithLabelValues("false", "insufficient_funds").Inc()
+			http.Error(w, err.Error(), http.StatusPaymentRequired)
+			return
+		}
+
+		// Process payment with kubepark
+		if err := PayPark(w, r, config); err != nil {
+			log.Printf("Failed to process payment: %v", err)
+			Metrics.AttractionAttempts.WithLabelValues("false", "payment_failed").Inc()
+			http.Error(w, "Payment failed", http.StatusInternalServerError)
+			return
+		}
+
+		// Simulate usage duration
+		time.Sleep(config.Duration)
+
+		// Call after use hook if set
+		if afterUse != nil {
+			if err := afterUse(); err != nil {
+				log.Printf("After use hook failed: %v", err)
+				Metrics.AttractionAttempts.WithLabelValues("false", "hook_failed").Inc()
+				http.Error(w, "Failed to cleanup attraction", http.StatusInternalServerError)
+				return
+			}
+		}
+
+		Metrics.AttractionAttempts.WithLabelValues("true", "success").Inc()
+		w.WriteHeader(http.StatusOK)
+	}
 }
