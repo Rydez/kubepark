@@ -103,9 +103,6 @@ func (p *Park) Start() error {
 		ctx := context.Background()
 
 		for range ticker.C {
-			log.Println("tick!!!!!")
-			log.Println(p.State.GetTime().Add(time.Second * 10))
-
 			// Speed up simulation time
 			p.State.SetTime(p.State.GetTime().Add(time.Second * 10))
 
@@ -131,7 +128,7 @@ func (p *Park) Start() error {
 					log.Printf("Failed to cleanup all jobs during closed hours: %v", err)
 				}
 
-				return
+				continue
 			}
 
 			// Randomly decide whether to create a new guest (10% chance)
