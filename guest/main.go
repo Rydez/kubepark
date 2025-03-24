@@ -29,10 +29,8 @@ var (
 
 	// Configuration
 	config struct {
-		ParkURL   string
-		Money     float64
-		StartTime time.Time
-		EndTime   time.Time
+		ParkURL string
+		Money   float64
 	}
 )
 
@@ -61,11 +59,6 @@ func main() {
 	// Set fixed values
 	config.Money = 100 // Each guest starts with $100
 
-	// Set start and end times for the day
-	now := time.Now()
-	config.StartTime = time.Date(now.Year(), now.Month(), now.Day(), 8, 0, 0, 0, now.Location())
-	config.EndTime = time.Date(now.Year(), now.Month(), now.Day(), 20, 0, 0, 0, now.Location())
-
 	// Start metrics server
 	go func() {
 		log.Printf("Starting metrics server on port 9000")
@@ -85,12 +78,6 @@ func main() {
 	// Start exploring attractions
 	log.Printf("Starting attraction loop")
 	for {
-		// Check if park is still open
-		if time.Now().After(config.EndTime) {
-			log.Println("Park is closed, leaving")
-			break
-		}
-
 		// Visit a random attraction
 		if err := visitAttraction(); err != nil {
 			log.Printf("Failed to visit attraction: %v", err)
