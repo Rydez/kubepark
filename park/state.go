@@ -39,14 +39,21 @@ type GameState struct {
 }
 
 // New creates a new game state manager
-func NewGameState(volumePath string) (*GameState, error) {
+func NewGameState(config *Config) (*GameState, error) {
 	state := &GameState{
-		VolumePath:  volumePath,
 		CurrentTime: time.Now(),
 		LastSaved:   time.Now(),
 		Money:       100000, // Starting cash
 		Attractions: make(map[string]AttractionState),
 		GuestSize:   0.05, // Each guest takes 0.1 acres
+
+		// Config values
+		VolumePath:  config.VolumePath,
+		Mode:        config.Mode,
+		EntranceFee: config.EntranceFee,
+		OpensAt:     config.OpensAt,
+		ClosesAt:    config.ClosesAt,
+		Closed:      config.Closed,
 	}
 
 	// Set total space based on mode
@@ -62,7 +69,7 @@ func NewGameState(volumePath string) (*GameState, error) {
 	}
 
 	// Try to load existing state if volume path is provided
-	if volumePath != "" {
+	if config.VolumePath != "" {
 		if err := state.Load(); err != nil {
 			// If file doesn't exist, that's fine - we'll create it on first save
 			if !os.IsNotExist(err) {

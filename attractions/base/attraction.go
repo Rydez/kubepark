@@ -99,12 +99,14 @@ func (a *Attraction) Register() error {
 // Start starts both the metrics and main HTTP servers
 func (a *Attraction) Start() error {
 	// Register with kubepark
+	log.Printf("Registering attraction with kubepark")
 	if err := a.Register(); err != nil {
 		return fmt.Errorf("failed to register attraction: %v", err)
 	}
 
 	// Start metrics server
 	go func() {
+		log.Printf("Starting metrics server on port 9000")
 		if err := a.MetricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatal(err)
 		}
@@ -112,6 +114,7 @@ func (a *Attraction) Start() error {
 
 	// Start the attraction simulation loop
 	go func() {
+		log.Printf("Starting attraction simulation loop")
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
 
@@ -142,6 +145,7 @@ func (a *Attraction) Start() error {
 	}()
 
 	// Start main server
+	log.Printf("Starting main server on port 80")
 	return a.MainServer.ListenAndServe()
 }
 

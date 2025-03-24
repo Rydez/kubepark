@@ -69,6 +69,7 @@ func init() {
 func main() {
 	// Start metrics server
 	go func() {
+		log.Printf("Starting metrics server on port 9000")
 		http.Handle("/metrics", promhttp.Handler())
 		if err := http.ListenAndServe(":9000", nil); err != nil {
 			log.Fatal(err)
@@ -76,12 +77,14 @@ func main() {
 	}()
 
 	// Try to enter the park
+	log.Printf("Entering park")
 	if err := enterPark(); err != nil {
 		log.Printf("Failed to enter park: %v", err)
 		return
 	}
 
 	// Start exploring attractions
+	log.Printf("Starting attraction loop")
 	for {
 		// Check if park is still open
 		if time.Now().After(config.EndTime) {
