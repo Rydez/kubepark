@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -48,15 +49,16 @@ func New() *Park {
 		log.Fatalf("Failed to initialize guest job manager: %v", err)
 	}
 
-	RegisterParkMetrics()
 	metrics.EntranceFee.Set(config.EntranceFee)
 	metrics.IsParkClosed.Set(btof(config.Closed))
 	metrics.OpensAt.Set(float64(config.OpensAt))
 	metrics.ClosesAt.Set(float64(config.ClosesAt))
 
 	// Create metrics server on port 9000
+	r := prometheus.NewRegistry()
+	RegisterParkMetrics(r)
 	metricsMux := http.NewServeMux()
-	metricsMux.HandleFunc("/metrics", promhttp.Handler().ServeHTTP)
+	metricsMux.Handle("/metrics", promhttp.HandlerFor(r, promhttp.HandlerOpts{}))
 	metricsServer := &http.Server{
 		Addr:    ":9000",
 		Handler: metricsMux,

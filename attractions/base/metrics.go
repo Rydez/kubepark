@@ -35,9 +35,9 @@ var Metrics = struct {
 }
 
 // RegisterAttractionMetrics registers all attraction-specific metrics
-func RegisterAttractionMetrics() {
-	prometheus.MustRegister(Metrics.Revenue)
-	prometheus.MustRegister(Metrics.Fee)
-	prometheus.MustRegister(Metrics.IsAttractionClosed)
-	prometheus.MustRegister(Metrics.AttractionAttempts)
+func RegisterAttractionMetrics(r *prometheus.Registry) {
+	r.MustRegister(Metrics.Revenue)
+	r.MustRegister(Metrics.Fee)
+	r.MustRegister(Metrics.IsAttractionClosed)
+	r.MustRegister(Metrics.AttractionAttempts)
 }

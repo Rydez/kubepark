@@ -51,12 +51,12 @@ var metrics = struct {
 }
 
 // RegisterParkMetrics registers all park-specific metrics
-func RegisterParkMetrics() {
-	prometheus.MustRegister(metrics.Money)
-	prometheus.MustRegister(metrics.Time)
-	prometheus.MustRegister(metrics.EntranceFee)
-	prometheus.MustRegister(metrics.OpensAt)
-	prometheus.MustRegister(metrics.ClosesAt)
-	prometheus.MustRegister(metrics.IsParkClosed)
-	prometheus.MustRegister(metrics.Guests)
+func RegisterParkMetrics(r *prometheus.Registry) {
+	r.MustRegister(metrics.Money)
+	r.MustRegister(metrics.Time)
+	r.MustRegister(metrics.EntranceFee)
+	r.MustRegister(metrics.OpensAt)
+	r.MustRegister(metrics.ClosesAt)
+	r.MustRegister(metrics.IsParkClosed)
+	r.MustRegister(metrics.Guests)
 }

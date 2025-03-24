@@ -11,6 +11,7 @@ import (
 
 	"kubepark/pkg/httptypes"
 
+	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
@@ -25,13 +26,14 @@ type Attraction struct {
 func New(config *Config, defaultFee float64, afterUse func() error) *Attraction {
 	RegisterFlags(config, defaultFee)
 
-	RegisterAttractionMetrics()
+	r := prometheus.NewRegistry()
+	RegisterAttractionMetrics(r)
 	Metrics.Fee.Set(config.Fee)
 	Metrics.IsAttractionClosed.Set(btof(config.Closed))
 
 	// Create metrics server on port 9000
 	metricsMux := http.NewServeMux()
-	metricsMux.HandleFunc("/metrics", promhttp.Handler().ServeHTTP)
+	metricsMux.Handle("/metrics", promhttp.HandlerFor(r, promhttp.HandlerOpts{}))
 	metricsServer := &http.Server{
 		Addr:    ":9000",
 		Handler: metricsMux,

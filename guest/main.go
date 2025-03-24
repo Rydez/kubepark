@@ -48,10 +48,11 @@ type Attraction struct {
 	Fee  float64 `json:"fee"`
 }
 
-func init() {
+func main() {
 	// Register metrics
-	prometheus.MustRegister(MoneySpent)
-	prometheus.MustRegister(AttractionsVisited)
+	r := prometheus.NewRegistry()
+	r.MustRegister(MoneySpent)
+	r.MustRegister(AttractionsVisited)
 
 	// Parse flags
 	flag.StringVar(&config.ParkURL, "park-url", "http://kubepark:80", "URL of the kubepark service")
@@ -64,13 +65,11 @@ func init() {
 	now := time.Now()
 	config.StartTime = time.Date(now.Year(), now.Month(), now.Day(), 8, 0, 0, 0, now.Location())
 	config.EndTime = time.Date(now.Year(), now.Month(), now.Day(), 20, 0, 0, 0, now.Location())
-}
 
-func main() {
 	// Start metrics server
 	go func() {
 		log.Printf("Starting metrics server on port 9000")
-		http.Handle("/metrics", promhttp.Handler())
+		http.Handle("/metrics", promhttp.HandlerFor(r, promhttp.HandlerOpts{}))
 		if err := http.ListenAndServe(":9000", nil); err != nil {
 			log.Fatal(err)
 		}
