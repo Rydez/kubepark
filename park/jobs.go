@@ -34,7 +34,7 @@ func NewGuestJobManager() (*GuestJobManager, error) {
 }
 
 // CreateGuestJob creates a new guest job
-func (m *GuestJobManager) CreateGuestJob(ctx context.Context, parkURL string) error {
+func (m *GuestJobManager) CreateGuestJob(ctx context.Context, image string, parkURL string) error {
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			GenerateName: "guest-",
@@ -45,7 +45,7 @@ func (m *GuestJobManager) CreateGuestJob(ctx context.Context, parkURL string) er
 					Containers: []corev1.Container{
 						{
 							Name:    "guest",
-							Image:   "kubepark:latest",
+							Image:   image,
 							Command: []string{"/opt/kubepark/internal/guest"},
 							Args: []string{
 								"--park-url", parkURL,
@@ -74,8 +74,11 @@ func (m *GuestJobManager) CleanupJobs(ctx context.Context) error {
 		return fmt.Errorf("failed to list jobs: %w", err)
 	}
 
+	backgroundDeletion := metav1.DeletePropagationBackground
 	for _, job := range jobs.Items {
-		err := m.clientset.BatchV1().Jobs("guests").Delete(ctx, job.Name, metav1.DeleteOptions{})
+		err := m.clientset.BatchV1().Jobs("guests").Delete(ctx, job.Name, metav1.DeleteOptions{
+			PropagationPolicy: &backgroundDeletion,
+		})
 		if err != nil {
 			return fmt.Errorf("failed to delete job %s: %w", job.Name, err)
 		}

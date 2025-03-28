@@ -154,13 +154,6 @@ func (s *GameState) GetMoney() float64 {
 	return s.Money
 }
 
-// UpdateTime updates the park's current time
-func (s *GameState) UpdateTime(t time.Time) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.CurrentTime = t
-}
-
 // GetTime returns the park's current time
 func (s *GameState) GetTime() time.Time {
 	s.mu.RLock()

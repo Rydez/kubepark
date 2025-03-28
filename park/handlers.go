@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"log"
 	"net/http"
 
 	"kubepark/pkg/httptypes"
@@ -48,6 +49,7 @@ func handleEnterPark(state *GameState) http.HandlerFunc {
 
 		// Check if park is closed
 		if state.IsClosed() {
+			log.Printf("Turned away guest, park is closed")
 			json.NewEncoder(w).Encode(httptypes.EnterParkResponse{
 				Success: false,
 				Message: "Park is closed",
@@ -57,6 +59,7 @@ func handleEnterPark(state *GameState) http.HandlerFunc {
 
 		// Check if park is at capacity
 		if !state.CanAddGuest() {
+			log.Printf("Turned away guest, park is at capacity")
 			json.NewEncoder(w).Encode(httptypes.EnterParkResponse{
 				Success: false,
 				Message: "Park is at capacity",
@@ -67,6 +70,7 @@ func handleEnterPark(state *GameState) http.HandlerFunc {
 		// Process entrance fee
 		state.AddMoney(state.EntranceFee)
 
+		log.Printf("Accepted guest")
 		json.NewEncoder(w).Encode(httptypes.EnterParkResponse{
 			Success: true,
 			Message: "Welcome to the park!",
@@ -82,17 +86,17 @@ func handleListAttractions(state *GameState) http.HandlerFunc {
 			return
 		}
 
-		data := httptypes.ListAttractionsResponse{}
+		attractions := []httptypes.Attraction{}
 		attractionStates := state.GetAttractions()
 		for _, attractionState := range attractionStates {
 			if attractionState.IsRepaired && !attractionState.IsPending {
-				data.Attractions = append(data.Attractions, httptypes.Attraction{
+				attractions = append(attractions, httptypes.Attraction{
 					URL: attractionState.URL,
 				})
 			}
 		}
 
-		json.NewEncoder(w).Encode(data)
+		json.NewEncoder(w).Encode(attractions)
 	}
 }
 

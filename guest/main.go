@@ -93,7 +93,7 @@ func main() {
 		time.Sleep(time.Duration(rand.Intn(30)+30) * time.Second)
 	}
 
-	log.Printf("Guest finished their visit. Attractions visited: %d", AttractionsVisited)
+	log.Printf("Guest finished their visit.")
 }
 
 func enterPark() error {

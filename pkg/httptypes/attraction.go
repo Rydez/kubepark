@@ -5,11 +5,6 @@ type Attraction struct {
 	URL string `json:"url"`
 }
 
-// ListAttractionsResponse list of attractions requested by the guest
-type ListAttractionsResponse struct {
-	Attractions []Attraction `json:"attractions"`
-}
-
 // RegisterAttractionRequest represents a request to register a new attraction
 type RegisterAttractionRequest struct {
 	URL        string  `json:"url"`

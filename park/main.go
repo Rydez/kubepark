@@ -106,7 +106,7 @@ func (p *Park) Start() error {
 
 		for range ticker.C {
 			// Speed up simulation time
-			p.State.SetTime(p.State.GetTime().Add(time.Second * 10))
+			p.State.SetTime(p.State.GetTime().Add(time.Second * 100))
 
 			// Update metrics
 			metrics.Time.Set(float64(p.State.GetTime().Unix()))
@@ -141,7 +141,7 @@ func (p *Park) Start() error {
 					url = "http://park:80"
 				}
 
-				if err := p.GuestManager.CreateGuestJob(ctx, url); err != nil {
+				if err := p.GuestManager.CreateGuestJob(ctx, p.Config.Image, url); err != nil {
 					log.Printf("Failed to create guest job: %v", err)
 				}
 			}
