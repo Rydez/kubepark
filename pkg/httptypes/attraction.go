@@ -13,12 +13,12 @@ type RegisterAttractionRequest struct {
 	Size       float64 `json:"size"` // Size in acres
 }
 
-// UseAttractionRequest represents a request to use the attraction
-type UseAttractionRequest struct {
-	GuestMoney float64 `json:"guest_money"`
-}
-
 // BreakAttractionRequest represents a request to break the attraction
 type BreakAttractionRequest struct {
 	URL string `json:"url"`
+}
+
+// IsAttractionResponse represents the response from the /is-attraction endpoint
+type IsAttractionResponse struct {
+	Fee float64 `json:"fee"`
 }

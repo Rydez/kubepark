@@ -4,7 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"math/rand/v2"
+	"math/rand"
 	"net/http"
 	"os"
 	"time"
@@ -22,7 +22,7 @@ type Park struct {
 	Config        *Config
 	MetricsServer *http.Server
 	MainServer    *http.Server
-	State         *GameState
+	State         *StateManager
 	GuestManager  *GuestJobManager
 }
 
@@ -38,7 +38,7 @@ func New() *Park {
 	}
 
 	// Initialize game state
-	gameState, err := NewGameState(config)
+	state, err := NewStateManager(config)
 	if err != nil {
 		log.Fatalf("Failed to initialize game state: %v", err)
 	}
@@ -67,11 +67,8 @@ func New() *Park {
 	// Create main server on port 80
 	mainMux := http.NewServeMux()
 	mainMux.HandleFunc("/is-park", handleIsPark())
-	mainMux.HandleFunc("/pay", handlePayPark(gameState))
-	mainMux.HandleFunc("/enter", handleEnterPark(gameState))
-	mainMux.HandleFunc("/attractions", handleListAttractions(gameState))
-	mainMux.HandleFunc("/register", handleRegisterAttraction(gameState))
-	mainMux.HandleFunc("/break", handleBreakAttraction(gameState))
+	mainMux.HandleFunc("/pay", handlePayPark(state))
+	mainMux.HandleFunc("/enter", handleEnterPark(state))
 	mainServer := &http.Server{
 		Addr:    ":80",
 		Handler: mainMux,
@@ -81,14 +78,14 @@ func New() *Park {
 		Config:        config,
 		MetricsServer: metricsServer,
 		MainServer:    mainServer,
-		State:         gameState,
+		State:         state,
 		GuestManager:  guestManager,
 	}
 }
 
 // Start starts the park simulator
 func (p *Park) Start() error {
-	// Start the metrics server
+	// Start metrics server
 	go func() {
 		log.Printf("Starting metrics server on port 9000")
 		if err := p.MetricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
@@ -111,16 +108,6 @@ func (p *Park) Start() error {
 			// Update metrics
 			metrics.Time.Set(float64(p.State.GetTime().Unix()))
 			metrics.Money.Set(p.State.GetMoney())
-
-			// Save state every minute
-			if time.Since(p.State.GetTime()) > time.Minute {
-				if err := p.State.Save(); err != nil {
-					log.Printf("Failed to save state: %v", err)
-				}
-			}
-
-			// Check attraction statuses
-			p.checkAttractionPending()
 
 			currentHour := p.State.GetTime().Hour()
 			isClosed := currentHour < p.Config.OpensAt || currentHour >= p.Config.ClosesAt
@@ -148,18 +135,13 @@ func (p *Park) Start() error {
 		}
 	}()
 
-	// Start the main server
+	// Start main server
 	log.Printf("Starting main server on port 80")
 	return p.MainServer.ListenAndServe()
 }
 
 // Stop gracefully stops the park simulator
 func (p *Park) Stop() error {
-	// Save final state
-	if err := p.State.Save(); err != nil {
-		log.Printf("Failed to save final state: %v", err)
-	}
-
 	if err := p.MetricsServer.Close(); err != nil {
 		return err
 	}
@@ -249,41 +231,4 @@ func checkForExistingPark() error {
 	}
 
 	return nil
-}
-
-// checkAttractionPending checks the status of all attractions and updates their pending state
-func (p *Park) checkAttractionPending() {
-	client := &http.Client{
-		Timeout: time.Second * 2,
-	}
-
-	for _, attraction := range p.State.GetAttractions() {
-		// Skip if we can't reach the attraction
-		resp, err := client.Get(attraction.URL + "/status")
-		if err != nil {
-			// If we can't reach the attraction and it's not pending, mark it as pending
-			if !attraction.IsPending {
-				if err := p.State.SetAttractionPending(attraction.URL, true); err != nil {
-					log.Printf("Failed to update attraction status: %v", err)
-				}
-			}
-			continue
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != http.StatusOK {
-			// If we get an error response and it's not pending, mark it as pending
-			if !attraction.IsPending {
-				if err := p.State.SetAttractionPending(attraction.URL, true); err != nil {
-					log.Printf("Failed to update attraction status: %v", err)
-				}
-			}
-			continue
-		}
-
-		// Update the attraction's pending status
-		if err := p.State.SetAttractionPending(attraction.URL, false); err != nil {
-			log.Printf("Failed to update attraction status: %v", err)
-		}
-	}
 }

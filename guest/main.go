@@ -1,18 +1,24 @@
 package main
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
-	"kubepark/pkg/httptypes"
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"time"
+
+	"kubepark/pkg/httptypes"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 var (
@@ -34,16 +40,10 @@ var (
 	}
 )
 
-// ParkResponse represents a response from the park
-type ParkResponse struct {
-	Success bool   `json:"success"`
-	Message string `json:"message"`
-}
-
 // Attraction represents an attraction in the park
 type Attraction struct {
-	Name string  `json:"name"`
-	Fee  float64 `json:"fee"`
+	URL string  `json:"url"`
+	Fee float64 `json:"fee"`
 }
 
 func main() {
@@ -113,16 +113,10 @@ func enterPark() error {
 }
 
 func visitAttraction() error {
-	// Get list of available attractions
-	resp, err := http.Get(config.ParkURL + "/attractions")
+	// Get list of available attractions using Kubernetes API
+	attractions, err := discoverAttractions()
 	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	var attractions []Attraction
-	if err := json.NewDecoder(resp.Body).Decode(&attractions); err != nil {
-		return err
+		return fmt.Errorf("failed to discover attractions: %v", err)
 	}
 
 	if len(attractions) == 0 {
@@ -132,24 +126,20 @@ func visitAttraction() error {
 	// Choose a random attraction
 	randAttraction := attractions[rand.Intn(len(attractions))]
 
-	// Create use request with remaining money
-	useReq := httptypes.UseAttractionRequest{
-		GuestMoney: config.Money,
-	}
-	useData, err := json.Marshal(useReq)
-	if err != nil {
-		return fmt.Errorf("failed to marshal use request: %v", err)
+	// Check if guest has enough money
+	if config.Money < randAttraction.Fee {
+		return fmt.Errorf("insufficient funds. Fee is $%.2f but guest has $%.2f", randAttraction.Fee, config.Money)
 	}
 
 	// Visit the attraction
-	resp, err = http.Post(fmt.Sprintf("%s/use", randAttraction.Name), "application/json", bytes.NewBuffer(useData))
+	resp, err := http.Post(fmt.Sprintf("%s/use", randAttraction.URL), "application/json", nil)
 	if err != nil {
 		return err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to use attraction %s: %s", randAttraction.Name, resp.Status)
+		return fmt.Errorf("failed to use attraction %s: %s", randAttraction.URL, resp.Status)
 	}
 
 	// Update metrics and money
@@ -157,6 +147,71 @@ func visitAttraction() error {
 	AttractionsVisited.Inc()
 	config.Money -= randAttraction.Fee
 
-	log.Printf("Visited %s for $%.2f", randAttraction.Name, randAttraction.Fee)
+	log.Printf("Visited %s for $%.2f", randAttraction.URL, randAttraction.Fee)
 	return nil
+}
+
+func discoverAttractions() ([]Attraction, error) {
+	// Get in-cluster config
+	k8sConfig, err := rest.InClusterConfig()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get in-cluster config: %v", err)
+	}
+
+	// Create Kubernetes client
+	clientset, err := kubernetes.NewForConfig(k8sConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create clientset: %v", err)
+	}
+
+	// Get all pods in the cluster
+	pods, err := clientset.CoreV1().Pods("").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list pods: %v", err)
+	}
+
+	var attractions []Attraction
+	client := &http.Client{
+		Timeout: time.Second * 2,
+	}
+
+	// Check each pod for the /is-attraction endpoint
+	for _, pod := range pods.Items {
+		if pod.Status.Phase != corev1.PodRunning {
+			continue
+		}
+
+		// Skip the current pod
+		if pod.Name == os.Getenv("HOSTNAME") {
+			continue
+		}
+
+		// Try to connect to the pod's IP
+		podIP := pod.Status.PodIP
+		if podIP == "" {
+			continue
+		}
+
+		// Check if this is an attraction
+		resp, err := client.Get(fmt.Sprintf("http://%s/is-attraction", podIP))
+		if err != nil {
+			continue // Skip if we can't connect
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode == http.StatusOK {
+			var feeResponse httptypes.IsAttractionResponse
+			if err := json.NewDecoder(resp.Body).Decode(&feeResponse); err != nil {
+				log.Printf("Failed to decode fee response: %v", err)
+				continue
+			}
+
+			attractions = append(attractions, Attraction{
+				URL: fmt.Sprintf("http://%s", podIP),
+				Fee: feeResponse.Fee,
+			})
+		}
+	}
+
+	return attractions, nil
 }

@@ -20,11 +20,18 @@ type Attraction struct {
 	Config        *Config
 	MetricsServer *http.Server
 	MainServer    *http.Server
+	State         *StateManager
 }
 
 // New creates a new base attraction
 func New(config *Config, defaultFee float64, afterUse func() error) *Attraction {
 	RegisterFlags(config, defaultFee)
+
+	// Initialize state manager
+	state, err := NewStateManager(config.VolumePath)
+	if err != nil {
+		log.Fatalf("Failed to initialize state manager: %v", err)
+	}
 
 	r := prometheus.NewRegistry()
 	RegisterAttractionMetrics(r)
@@ -42,7 +49,8 @@ func New(config *Config, defaultFee float64, afterUse func() error) *Attraction 
 	// Create main server on port 80
 	mainMux := http.NewServeMux()
 	mainMux.HandleFunc("/status", handleStatus())
-	mainMux.HandleFunc("/use", handleUse(config, afterUse))
+	mainMux.HandleFunc("/use", handleUse(config, state, afterUse))
+	mainMux.HandleFunc("/is-attraction", handleIsAttraction(config, state))
 	mainServer := &http.Server{
 		Addr:    ":80",
 		Handler: mainMux,
@@ -52,6 +60,7 @@ func New(config *Config, defaultFee float64, afterUse func() error) *Attraction 
 		Config:        config,
 		MetricsServer: metricsServer,
 		MainServer:    mainServer,
+		State:         state,
 	}
 }
 
@@ -63,6 +72,22 @@ func handleStatus() http.HandlerFunc {
 			return
 		}
 		w.WriteHeader(http.StatusOK)
+	}
+}
+
+// handleIsAttraction handles the is-attraction endpoint
+func handleIsAttraction(config *Config, state *StateManager) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		// Return the attraction's fee
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(httptypes.IsAttractionResponse{
+			Fee: config.Fee,
+		})
 	}
 }
 
@@ -182,20 +207,6 @@ func PayPark(w http.ResponseWriter, r *http.Request, config *Config) error {
 	return nil
 }
 
-// ValidatePayment validates if a guest has enough money to use the attraction
-func ValidatePayment(w http.ResponseWriter, r *http.Request, config *Config) (float64, error) {
-	var useReq httptypes.UseAttractionRequest
-	if err := json.NewDecoder(r.Body).Decode(&useReq); err != nil {
-		return 0, fmt.Errorf("invalid payment request: %v", err)
-	}
-
-	if useReq.GuestMoney < config.Fee {
-		return 0, fmt.Errorf("insufficient funds. Fee is $%.2f but guest has $%.2f", config.Fee, useReq.GuestMoney)
-	}
-
-	return useReq.GuestMoney, nil
-}
-
 // btof converts a bool to a float64 (0 or 1)
 func btof(b bool) float64 {
 	if b {
@@ -205,7 +216,7 @@ func btof(b bool) float64 {
 }
 
 // HandleUse handles the common use endpoint functionality
-func handleUse(config *Config, afterUse func() error) http.HandlerFunc {
+func handleUse(config *Config, state *StateManager, afterUse func() error) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -215,14 +226,6 @@ func handleUse(config *Config, afterUse func() error) http.HandlerFunc {
 		if config.Closed {
 			Metrics.AttractionAttempts.WithLabelValues("false", "attraction_closed").Inc()
 			http.Error(w, fmt.Sprintf("%s is closed", config.Name), http.StatusServiceUnavailable)
-			return
-		}
-
-		// Validate payment
-		_, err := ValidatePayment(w, r, config)
-		if err != nil {
-			Metrics.AttractionAttempts.WithLabelValues("false", "insufficient_funds").Inc()
-			http.Error(w, err.Error(), http.StatusPaymentRequired)
 			return
 		}
 

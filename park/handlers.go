@@ -20,7 +20,7 @@ func handleIsPark() http.HandlerFunc {
 }
 
 // handlePayPark handles payment requests from attractions
-func handlePayPark(state *GameState) http.HandlerFunc {
+func handlePayPark(state *StateManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -40,7 +40,7 @@ func handlePayPark(state *GameState) http.HandlerFunc {
 }
 
 // handleEnterPark handles guest entry requests
-func handleEnterPark(state *GameState) http.HandlerFunc {
+func handleEnterPark(state *StateManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -62,77 +62,8 @@ func handleEnterPark(state *GameState) http.HandlerFunc {
 		}
 
 		// Process entrance fee
-		state.AddMoney(state.EntranceFee)
+		state.AddMoney(state.GetEntranceFee())
 		log.Printf("Accepted guest")
-		w.WriteHeader(http.StatusOK)
-	}
-}
-
-// handleListAttractions returns a list of available attractions
-func handleListAttractions(state *GameState) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		attractions := []httptypes.Attraction{}
-		attractionStates := state.GetAttractions()
-		for _, attractionState := range attractionStates {
-			if attractionState.IsRepaired && !attractionState.IsPending {
-				attractions = append(attractions, httptypes.Attraction{
-					URL: attractionState.URL,
-				})
-			}
-		}
-
-		json.NewEncoder(w).Encode(attractions)
-	}
-}
-
-// handleRegisterAttraction handles attraction registration requests
-func handleRegisterAttraction(state *GameState) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		var req httptypes.RegisterAttractionRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
-			return
-		}
-
-		err := state.RegisterAttraction(req)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		w.WriteHeader(http.StatusOK)
-	}
-}
-
-func handleBreakAttraction(state *GameState) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		var req httptypes.BreakAttractionRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
-			return
-		}
-
-		err := state.MarkAttractionBroken(req.URL)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
 		w.WriteHeader(http.StatusOK)
 	}
 }
