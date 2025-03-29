@@ -48,7 +48,6 @@ func New(config *Config, defaultFee float64, afterUse func() error) *Attraction 
 
 	// Create main server on port 80
 	mainMux := http.NewServeMux()
-	mainMux.HandleFunc("/status", handleStatus())
 	mainMux.HandleFunc("/use", handleUse(config, state, afterUse))
 	mainMux.HandleFunc("/is-attraction", handleIsAttraction(config, state))
 	mainServer := &http.Server{
@@ -61,33 +60,6 @@ func New(config *Config, defaultFee float64, afterUse func() error) *Attraction 
 		MetricsServer: metricsServer,
 		MainServer:    mainServer,
 		State:         state,
-	}
-}
-
-// handleStatus handles the status endpoint
-func handleStatus() http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		w.WriteHeader(http.StatusOK)
-	}
-}
-
-// handleIsAttraction handles the is-attraction endpoint
-func handleIsAttraction(config *Config, state *StateManager) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		// Return the attraction's fee
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(httptypes.IsAttractionResponse{
-			Fee: config.Fee,
-		})
 	}
 }
 
