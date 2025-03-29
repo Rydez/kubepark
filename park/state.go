@@ -183,7 +183,7 @@ func (s *GameState) IsClosed() bool {
 }
 
 // RegisterAttraction registers a new attraction with the park
-func (s *GameState) RegisterAttraction(req httptypes.RegisterAttractionRequest) (bool, error) {
+func (s *GameState) RegisterAttraction(req httptypes.RegisterAttractionRequest) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -192,19 +192,19 @@ func (s *GameState) RegisterAttraction(req httptypes.RegisterAttractionRequest) 
 	// Check if we have enough cash for a new attraction
 	if exists {
 		if s.Money < float64(req.RepairCost) {
-			return false, fmt.Errorf("insufficient funds to repair attraction")
+			return fmt.Errorf("insufficient funds to repair attraction")
 		}
 		s.Money -= float64(req.RepairCost)
 	} else {
 		if s.Money < float64(req.BuildCost) {
-			return false, fmt.Errorf("insufficient funds to purchase attraction")
+			return fmt.Errorf("insufficient funds to purchase attraction")
 		}
 		s.Money -= float64(req.BuildCost)
 	}
 
 	// Check if we have enough space
 	if s.UsedSpace+req.Size > s.TotalSpace {
-		return false, fmt.Errorf("not enough space in park. Need %.1f acres but only have %.1f acres available", req.Size, s.TotalSpace-s.UsedSpace)
+		return fmt.Errorf("not enough space in park. Need %.1f acres but only have %.1f acres available", req.Size, s.TotalSpace-s.UsedSpace)
 	}
 	s.UsedSpace += req.Size
 
@@ -218,7 +218,7 @@ func (s *GameState) RegisterAttraction(req httptypes.RegisterAttractionRequest) 
 		IsPending:  true,
 	}
 
-	return true, nil
+	return nil
 }
 
 // SetAttractionPending updates the pending status of an attraction

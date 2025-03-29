@@ -50,31 +50,21 @@ func handleEnterPark(state *GameState) http.HandlerFunc {
 		// Check if park is closed
 		if state.IsClosed() {
 			log.Printf("Turned away guest, park is closed")
-			json.NewEncoder(w).Encode(httptypes.EnterParkResponse{
-				Success: false,
-				Message: "Park is closed",
-			})
+			http.Error(w, "Park is closed", http.StatusBadRequest)
 			return
 		}
 
 		// Check if park is at capacity
 		if !state.CanAddGuest() {
 			log.Printf("Turned away guest, park is at capacity")
-			json.NewEncoder(w).Encode(httptypes.EnterParkResponse{
-				Success: false,
-				Message: "Park is at capacity",
-			})
+			http.Error(w, "Park is at capacity", http.StatusBadRequest)
 			return
 		}
 
 		// Process entrance fee
 		state.AddMoney(state.EntranceFee)
-
 		log.Printf("Accepted guest")
-		json.NewEncoder(w).Encode(httptypes.EnterParkResponse{
-			Success: true,
-			Message: "Welcome to the park!",
-		})
+		w.WriteHeader(http.StatusOK)
 	}
 }
 
@@ -114,19 +104,13 @@ func handleRegisterAttraction(state *GameState) http.HandlerFunc {
 			return
 		}
 
-		success, err := state.RegisterAttraction(req)
+		err := state.RegisterAttraction(req)
 		if err != nil {
-			json.NewEncoder(w).Encode(httptypes.RegisterAttractionResponse{
-				Success: false,
-				Message: err.Error(),
-			})
+			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		json.NewEncoder(w).Encode(httptypes.RegisterAttractionResponse{
-			Success: success,
-			Message: "Attraction registered successfully",
-		})
+		w.WriteHeader(http.StatusOK)
 	}
 }
 
@@ -149,9 +133,6 @@ func handleBreakAttraction(state *GameState) http.HandlerFunc {
 			return
 		}
 
-		json.NewEncoder(w).Encode(httptypes.BreakAttractionResponse{
-			Success: true,
-			Message: "Attraction broken",
-		})
+		w.WriteHeader(http.StatusOK)
 	}
 }

@@ -104,13 +104,8 @@ func enterPark() error {
 	}
 	defer resp.Body.Close()
 
-	var parkResp ParkResponse
-	if err := json.NewDecoder(resp.Body).Decode(&parkResp); err != nil {
-		return err
-	}
-
-	if !parkResp.Success {
-		return fmt.Errorf("failed to enter park: %s", parkResp.Message)
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("failed to enter park: %s", resp.Status)
 	}
 
 	log.Println("Successfully entered the park")

@@ -86,7 +86,7 @@ func (a *Attraction) Register() error {
 
 	resp, err := http.Post(a.Config.ParkURL+"/register", "application/json", bytes.NewBuffer(data))
 	if err != nil {
-		return fmt.Errorf("failed to register with kubepark: %v", err)
+		return fmt.Errorf("failed to register with park: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -94,14 +94,14 @@ func (a *Attraction) Register() error {
 		return fmt.Errorf("registration failed with status: %d", resp.StatusCode)
 	}
 
-	log.Printf("Successfully registered %s with kubepark at %s", a.Config.Name, url)
+	log.Printf("Successfully registered %s with park at %s", a.Config.Name, url)
 	return nil
 }
 
 // Start starts both the metrics and main HTTP servers
 func (a *Attraction) Start() error {
-	// Register with kubepark
-	log.Printf("Registering attraction with kubepark")
+	// Register with park
+	log.Printf("Registering attraction with park")
 	if err := a.Register(); err != nil {
 		return fmt.Errorf("failed to register attraction: %v", err)
 	}
