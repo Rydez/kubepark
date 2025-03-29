@@ -3,18 +3,15 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
+	"kubepark/pkg/k8s"
 	"log"
 	"math/rand"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
 // Park represents the amusement park simulator
@@ -163,71 +160,20 @@ func main() {
 
 // checkForExistingPark checks if another park service exists in the cluster
 func checkForExistingPark() error {
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		return fmt.Errorf("failed to get in-cluster config: %w", err)
+	var parks []interface{}
+
+	decoder := func(r io.Reader, v *[]interface{}, ip string) error {
+		*v = append(*v, true)
+		return nil
 	}
 
-	clientset, err := kubernetes.NewForConfig(config)
+	err := k8s.DiscoverServices("/is-park", &parks, decoder)
 	if err != nil {
-		return fmt.Errorf("failed to create clientset: %w", err)
+		return err
 	}
 
-	// Look for pods with port 80 across all namespaces
-	pods, err := clientset.CoreV1().Pods("").List(context.Background(), metav1.ListOptions{})
-	if err != nil {
-		return fmt.Errorf("failed to list pods: %w", err)
-	}
-
-	// Count running park services
-	for _, pod := range pods.Items {
-		if pod.Status.Phase != corev1.PodRunning {
-			continue
-		}
-
-		// Skip the current pod
-		if pod.Name == os.Getenv("HOSTNAME") {
-			continue
-		}
-
-		// Check if pod has port 80
-		hasPort80 := false
-		for _, container := range pod.Spec.Containers {
-			for _, port := range container.Ports {
-				if port.ContainerPort == 80 {
-					hasPort80 = true
-					break
-				}
-			}
-			if hasPort80 {
-				break
-			}
-		}
-
-		if !hasPort80 {
-			continue
-		}
-
-		// Try to connect to the /is-park endpoint
-		client := &http.Client{
-			Timeout: time.Second * 2,
-		}
-
-		// Try to connect to the pod's IP
-		podIP := pod.Status.PodIP
-		if podIP == "" {
-			continue
-		}
-
-		resp, err := client.Get(fmt.Sprintf("http://%s/is-park", podIP))
-		if err != nil {
-			continue // Skip if we can't connect
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode == http.StatusOK {
-			return fmt.Errorf("another park service is already running in the cluster")
-		}
+	for len(parks) > 0 {
+		return fmt.Errorf("another park service is already running in the cluster")
 	}
 
 	return nil
