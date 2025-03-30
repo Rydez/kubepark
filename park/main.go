@@ -63,7 +63,7 @@ func New() *Park {
 
 	// Create main server on port 80
 	mainMux := http.NewServeMux()
-	mainMux.HandleFunc("/is-park", handleIsPark())
+	mainMux.HandleFunc("/park-status", handleParkStatus(state))
 	mainMux.HandleFunc("/pay", handlePayPark(state))
 	mainMux.HandleFunc("/enter", handleEnterPark(state))
 	mainServer := &http.Server{
@@ -167,7 +167,7 @@ func checkForExistingPark() error {
 		return nil
 	}
 
-	err := k8s.DiscoverServices("/is-park", &parks, decoder)
+	err := k8s.DiscoverServices("/park-status", &parks, decoder)
 	if err != nil {
 		return err
 	}

@@ -19,6 +19,7 @@ func New() *Carousel {
 		Duration:   3 * time.Second,
 		BuildCost:  20000,
 		RepairCost: 1000,
+		Size:       10,
 	}
 
 	defaultFee := 5.0

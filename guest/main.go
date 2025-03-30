@@ -1,16 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"math/rand"
 	"net/http"
 	"time"
 
-	"kubepark/pkg/httptypes"
 	"kubepark/pkg/k8s"
 
 	"github.com/prometheus/client_golang/prometheus"
@@ -110,7 +107,7 @@ func enterPark() error {
 
 func visitAttraction() error {
 	// Get list of available attractions using Kubernetes API
-	attractions, err := discoverAttractions()
+	attractions, err := k8s.DiscoverAttractions()
 	if err != nil {
 		return fmt.Errorf("failed to discover attractions: %v", err)
 	}
@@ -145,37 +142,4 @@ func visitAttraction() error {
 
 	log.Printf("Visited %s for $%.2f", randAttraction.URL, randAttraction.Fee)
 	return nil
-}
-
-func discoverAttractions() ([]Attraction, error) {
-	var attractions []interface{}
-
-	decoder := func(r io.Reader, v *[]interface{}, ip string) error {
-		var feeResponse httptypes.IsAttractionResponse
-		if err := json.NewDecoder(r).Decode(&feeResponse); err != nil {
-			return err
-		}
-
-		*v = append(*v, Attraction{
-			URL: fmt.Sprintf("http://%s", ip),
-			Fee: feeResponse.Fee,
-		})
-
-		return nil
-	}
-
-	err := k8s.DiscoverServices("/is-attraction", &attractions, decoder)
-
-	if err != nil {
-		return nil, err
-	}
-
-	var typedAttractions []Attraction
-	for _, a := range attractions {
-		if attr, ok := a.(Attraction); ok {
-			typedAttractions = append(typedAttractions, attr)
-		}
-	}
-
-	return typedAttractions, nil
 }

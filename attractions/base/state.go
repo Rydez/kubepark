@@ -7,6 +7,7 @@ import (
 // AttractionState represents the persistent state of an attraction
 type AttractionState struct {
 	IsPurchased bool `json:"is_purchased"`
+	IsBroken    bool `json:"is_broken"`
 }
 
 // StateManager manages the attraction's persistent state
@@ -18,6 +19,7 @@ type StateManager struct {
 func NewStateManager(volumePath string) (*StateManager, error) {
 	initialState := &AttractionState{
 		IsPurchased: false,
+		IsBroken:    false,
 	}
 
 	manager, err := state.New(initialState, volumePath)
@@ -49,5 +51,17 @@ func (s *StateManager) IsPurchased() bool {
 func (s *StateManager) SetPurchased(purchased bool) error {
 	return s.set(func(state *AttractionState) {
 		state.IsPurchased = purchased
+	})
+}
+
+// IsBroken returns whether the attraction is broken
+func (s *StateManager) IsBroken() bool {
+	return s.get().IsBroken
+}
+
+// SetBroken sets whether the attraction is broken
+func (s *StateManager) SetBroken(broken bool) error {
+	return s.set(func(state *AttractionState) {
+		state.IsBroken = broken
 	})
 }

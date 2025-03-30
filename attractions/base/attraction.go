@@ -9,7 +9,9 @@ import (
 	"net/http"
 	"time"
 
+	"kubepark/pkg/constants"
 	"kubepark/pkg/httptypes"
+	"kubepark/pkg/k8s"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -49,7 +51,7 @@ func New(config *Config, defaultFee float64, afterUse func() error) *Attraction 
 	// Create main server on port 80
 	mainMux := http.NewServeMux()
 	mainMux.HandleFunc("/use", handleUse(config, state, afterUse))
-	mainMux.HandleFunc("/is-attraction", handleIsAttraction(config, state))
+	mainMux.HandleFunc("/attraction-status", handleAttractionStatus(config, state))
 	mainServer := &http.Server{
 		Addr:    ":80",
 		Handler: mainMux,
@@ -63,44 +65,72 @@ func New(config *Config, defaultFee float64, afterUse func() error) *Attraction 
 	}
 }
 
-// Register registers the attraction with kubepark
-func (a *Attraction) Register() error {
-	url := a.Config.SelfURL
-	if url == "" {
-		url = fmt.Sprintf("http://%s:80", a.Config.Name)
-	}
-
-	registrationData := httptypes.RegisterAttractionRequest{
-		URL:        url,
-		BuildCost:  a.Config.BuildCost,
-		RepairCost: a.Config.RepairCost,
-		Size:       a.Config.Size,
-	}
-	data, err := json.Marshal(registrationData)
+// BeforeStart checks if there's enough space in the park and enough money to build the attraction.
+func (a *Attraction) BeforeStart() error {
+	resp, err := http.Get(a.Config.ParkURL + "/park-status")
 	if err != nil {
-		return fmt.Errorf("failed to marshal registration data: %v", err)
-	}
-
-	resp, err := http.Post(a.Config.ParkURL+"/register", "application/json", bytes.NewBuffer(data))
-	if err != nil {
-		return fmt.Errorf("failed to register with park: %v", err)
+		return fmt.Errorf("failed to get park status: %v", err)
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("registration failed with status: %d", resp.StatusCode)
+		return fmt.Errorf("park status check failed with status: %d", resp.StatusCode)
 	}
 
-	log.Printf("Successfully registered %s with park at %s", a.Config.Name, url)
+	var park httptypes.Park
+	if err := json.NewDecoder(resp.Body).Decode(&park); err != nil {
+		return fmt.Errorf("failed to decode park status: %v", err)
+	}
+
+	if a.State.IsBroken() {
+		if a.Config.RepairCost > park.Money {
+			return fmt.Errorf("not enough money to repair attraction")
+		}
+
+		if err := PayPark(a.Config, a.Config.RepairCost); err != nil {
+			return fmt.Errorf("failed to pay for repair: %v", err)
+		}
+	}
+
+	if a.Config.BuildCost > park.Money {
+		return fmt.Errorf("not enough money to build attraction")
+	}
+
+	attractions, err := k8s.DiscoverAttractions()
+	if err != nil {
+		return fmt.Errorf("failed to discover attractions: %v", err)
+	}
+
+	usedSpace := 0.0
+	for _, attraction := range attractions {
+		usedSpace += attraction.Size
+	}
+
+	jobs, err := k8s.DiscoverGuests()
+	if err != nil {
+		return fmt.Errorf("failed to discover guest jobs: %v", err)
+	}
+
+	usedSpace += constants.GuestSize * float64(len(jobs.Items))
+
+	if park.TotalSpace-usedSpace < a.Config.Size {
+		return fmt.Errorf("not enough space in the park")
+	}
+
+	if err := PayPark(a.Config, a.Config.BuildCost); err != nil {
+		return fmt.Errorf("failed to pay for build: %v", err)
+	}
+
+	log.Printf("Successfully started %s", a.Config.Name)
 	return nil
 }
 
 // Start starts both the metrics and main HTTP servers
 func (a *Attraction) Start() error {
 	// Register with park
-	log.Printf("Registering attraction with park")
-	if err := a.Register(); err != nil {
-		return fmt.Errorf("failed to register attraction: %v", err)
+	log.Printf("Checking if attraction can start")
+	if err := a.BeforeStart(); err != nil {
+		return fmt.Errorf("failed check to see if attraction can start: %v", err)
 	}
 
 	// Start metrics server
@@ -120,25 +150,7 @@ func (a *Attraction) Start() error {
 		for range ticker.C {
 			// Random chance to break the attraction (1% chance per second)
 			if rand.Float64() < 0.01 {
-				breakReq := httptypes.BreakAttractionRequest{
-					URL: a.Config.SelfURL,
-				}
-				breakData, err := json.Marshal(breakReq)
-				if err != nil {
-					log.Printf("Failed to marshal break request: %v", err)
-					continue
-				}
-
-				resp, err := http.Post(a.Config.ParkURL+"/break", "application/json", bytes.NewBuffer(breakData))
-				if err != nil {
-					log.Printf("Failed to send break request: %v", err)
-					continue
-				}
-				resp.Body.Close()
-
-				if resp.StatusCode == http.StatusOK {
-					log.Printf("Attraction %s has broken down", a.Config.Name)
-				}
+				a.State.SetBroken(true)
 			}
 		}
 	}()
@@ -157,8 +169,8 @@ func (a *Attraction) Stop() error {
 }
 
 // PayPark processes a payment with the park
-func PayPark(w http.ResponseWriter, r *http.Request, config *Config) error {
-	paymentReq := httptypes.PayParkRequest{Amount: config.Fee}
+func PayPark(config *Config, amount float64) error {
+	paymentReq := httptypes.PayParkRequest{Amount: amount}
 	paymentData, err := json.Marshal(paymentReq)
 	if err != nil {
 		return err
@@ -174,7 +186,7 @@ func PayPark(w http.ResponseWriter, r *http.Request, config *Config) error {
 		return fmt.Errorf("payment failed with status: %d", resp.StatusCode)
 	}
 
-	Metrics.Revenue.Add(config.Fee)
+	Metrics.Revenue.Add(amount)
 
 	return nil
 }
@@ -195,6 +207,12 @@ func handleUse(config *Config, state *StateManager, afterUse func() error) http.
 			return
 		}
 
+		if state.IsBroken() {
+			Metrics.AttractionAttempts.WithLabelValues("false", "attraction_broken").Inc()
+			http.Error(w, fmt.Sprintf("%s is broken", config.Name), http.StatusServiceUnavailable)
+			return
+		}
+
 		if config.Closed {
 			Metrics.AttractionAttempts.WithLabelValues("false", "attraction_closed").Inc()
 			http.Error(w, fmt.Sprintf("%s is closed", config.Name), http.StatusServiceUnavailable)
@@ -202,7 +220,7 @@ func handleUse(config *Config, state *StateManager, afterUse func() error) http.
 		}
 
 		// Process payment with kubepark
-		if err := PayPark(w, r, config); err != nil {
+		if err := PayPark(config, config.Fee); err != nil {
 			log.Printf("Failed to process payment: %v", err)
 			Metrics.AttractionAttempts.WithLabelValues("false", "payment_failed").Inc()
 			http.Error(w, "Payment failed", http.StatusInternalServerError)

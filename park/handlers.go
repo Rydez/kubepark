@@ -8,14 +8,19 @@ import (
 	"kubepark/pkg/httptypes"
 )
 
-// handleIsPark handles requests to check if this is a park service
-func handleIsPark() http.HandlerFunc {
+// handleParkStatus handles requests to check if this is a park service
+func handleParkStatus(state *StateManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
-		w.WriteHeader(http.StatusOK)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(httptypes.Park{
+			TotalSpace: state.GetTotalSpace(),
+			Money:      state.GetMoney(),
+		})
 	}
 }
 

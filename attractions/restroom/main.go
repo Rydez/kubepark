@@ -19,6 +19,7 @@ func New() *Restroom {
 		Duration:   2 * time.Second,
 		BuildCost:  10000,
 		RepairCost: 500,
+		Size:       1,
 	}
 
 	defaultFee := 2.0
