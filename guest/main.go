@@ -3,12 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
+	"kubepark/pkg/k8s"
+	"kubepark/pkg/logger"
+	"log/slog"
 	"math/rand"
 	"net/http"
 	"time"
-
-	"kubepark/pkg/k8s"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -28,8 +28,9 @@ var (
 
 	// Configuration
 	config struct {
-		ParkURL string
-		Money   float64
+		ParkURL  string
+		Money    float64
+		LogLevel string
 	}
 )
 
@@ -47,38 +48,43 @@ func main() {
 
 	// Parse flags
 	flag.StringVar(&config.ParkURL, "park-url", "http://kubepark:80", "URL of the kubepark service")
+	flag.StringVar(&config.LogLevel, "log-level", "info", "Log level (debug, info, warn, error)")
 	flag.Parse()
+
+	// Initialize logger with configured level
+	logger.InitLogger(config.LogLevel)
 
 	// Set fixed values
 	config.Money = 100 // Each guest starts with $100
 
 	// Start metrics server
 	go func() {
-		log.Printf("Starting metrics server on port 9000")
+		slog.Info("Starting metrics server on port 9000")
 		http.Handle("/metrics", promhttp.HandlerFor(r, promhttp.HandlerOpts{}))
 		if err := http.ListenAndServe(":9000", nil); err != nil {
-			log.Fatal(err)
+			slog.Error("Metrics server failed", "error", err)
+			panic(err)
 		}
 	}()
 
 	// Try to enter the park
-	log.Printf("Entering park")
+	slog.Info("Entering park")
 	if err := enterPark(); err != nil {
-		log.Printf("Failed to enter park: %v", err)
+		slog.Error("Failed to enter park", "error", err)
 		return
 	}
 
 	// Start exploring attractions
-	log.Printf("Starting attraction loop")
+	slog.Info("Starting attraction loop")
 	for {
 		// Visit a random attraction
 		if err := visitAttraction(); err != nil {
-			log.Printf("Failed to visit attraction: %v", err)
+			slog.Warn("Failed to visit attraction", "error", err)
 		}
 
 		// Random chance (30%) that guest decides to leave early
 		if rand.Float64() < 0.30 {
-			log.Println("Guest decided to leave early")
+			slog.Info("Guest decided to leave early")
 			break
 		}
 
@@ -86,7 +92,7 @@ func main() {
 		time.Sleep(time.Duration(rand.Intn(30)+30) * time.Second)
 	}
 
-	log.Printf("Guest finished their visit.")
+	slog.Info("Guest finished their visit.")
 }
 
 func enterPark() error {
@@ -101,7 +107,7 @@ func enterPark() error {
 		return fmt.Errorf("failed to enter park: %s", resp.Status)
 	}
 
-	log.Println("Successfully entered the park")
+	slog.Info("Successfully entered the park")
 	return nil
 }
 
@@ -140,6 +146,6 @@ func visitAttraction() error {
 	AttractionsVisited.Inc()
 	config.Money -= randAttraction.Fee
 
-	log.Printf("Visited %s for $%.2f", randAttraction.URL, randAttraction.Fee)
+	slog.Info("Visited attraction", "url", randAttraction.URL, "fee", randAttraction.Fee)
 	return nil
 }

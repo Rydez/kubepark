@@ -5,7 +5,8 @@ import (
 	"fmt"
 	"io"
 	"kubepark/pkg/k8s"
-	"log"
+	"kubepark/pkg/logger"
+	"log/slog"
 	"math/rand"
 	"net/http"
 	"time"
@@ -29,21 +30,27 @@ func New() *Park {
 
 	RegisterFlags(config)
 
+	// Initialize logger with configured level
+	logger.InitLogger(config.LogLevel)
+
 	// Check for existing park service
 	if err := checkForExistingPark(); err != nil {
-		log.Fatalf("Failed park check: %v", err)
+		slog.Error("Failed park check", "error", err)
+		panic(err)
 	}
 
 	// Initialize game state
 	state, err := NewStateManager(config)
 	if err != nil {
-		log.Fatalf("Failed to initialize game state: %v", err)
+		slog.Error("Failed to initialize game state", "error", err)
+		panic(err)
 	}
 
 	// Initialize guest job manager
 	guestManager, err := NewGuestJobManager()
 	if err != nil {
-		log.Fatalf("Failed to initialize guest job manager: %v", err)
+		slog.Error("Failed to initialize guest job manager", "error", err)
+		panic(err)
 	}
 
 	metrics.EntranceFee.Set(config.EntranceFee)
@@ -84,15 +91,16 @@ func New() *Park {
 func (p *Park) Start() error {
 	// Start metrics server
 	go func() {
-		log.Printf("Starting metrics server on port 9000")
+		slog.Info("Starting metrics server on port 9000")
 		if err := p.MetricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal(err)
+			slog.Error("Metrics server failed", "error", err)
+			panic(err)
 		}
 	}()
 
 	// Start the park simulation loop
 	go func() {
-		log.Printf("Starting park simulation loop")
+		slog.Info("Starting park simulation loop")
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
 
@@ -111,7 +119,7 @@ func (p *Park) Start() error {
 
 			if isClosed {
 				if err := p.GuestManager.CleanupJobs(ctx); err != nil {
-					log.Printf("Failed to cleanup all jobs during closed hours: %v", err)
+					slog.Warn("Failed to cleanup all jobs during closed hours", "error", err)
 				}
 
 				continue
@@ -126,14 +134,14 @@ func (p *Park) Start() error {
 				}
 
 				if err := p.GuestManager.CreateGuestJob(ctx, p.Config.Image, url); err != nil {
-					log.Printf("Failed to create guest job: %v", err)
+					slog.Warn("Failed to create guest job", "error", err)
 				}
 			}
 		}
 	}()
 
 	// Start main server
-	log.Printf("Starting main server on port 80")
+	slog.Info("Starting main server on port 80")
 	return p.MainServer.ListenAndServe()
 }
 
@@ -155,7 +163,10 @@ func btof(b bool) float64 {
 
 func main() {
 	park := New()
-	log.Fatal(park.Start())
+	if err := park.Start(); err != nil {
+		slog.Error("Park failed to start", "error", err)
+		panic(err)
+	}
 }
 
 // checkForExistingPark checks if another park service exists in the cluster

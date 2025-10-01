@@ -16,6 +16,7 @@ type Config struct {
 	RepairCost float64
 	Size       float64 // Size in acres
 	VolumePath string
+	LogLevel   string
 }
 
 func RegisterFlags(config *Config, defaultFee float64) {
@@ -23,5 +24,6 @@ func RegisterFlags(config *Config, defaultFee float64) {
 	flag.StringVar(&config.ParkURL, "park-url", "http://kubepark:80", "URL of the kubepark service")
 	flag.Float64Var(&config.Fee, "fee", defaultFee, "Fee for using the attraction")
 	flag.StringVar(&config.VolumePath, "volume", "", "Path to volume for persistent storage")
+	flag.StringVar(&config.LogLevel, "log-level", "info", "Log level (debug, info, warn, error)")
 	flag.Parse()
 }

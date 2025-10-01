@@ -2,7 +2,7 @@ package main
 
 import (
 	"encoding/json"
-	"log"
+	"log/slog"
 	"net/http"
 
 	"kubepark/pkg/httptypes"
@@ -54,21 +54,21 @@ func handleEnterPark(state *StateManager) http.HandlerFunc {
 
 		// Check if park is closed
 		if state.IsClosed() {
-			log.Printf("Turned away guest, park is closed")
+			slog.Info("Turned away guest, park is closed")
 			http.Error(w, "Park is closed", http.StatusBadRequest)
 			return
 		}
 
 		// Check if park is at capacity
 		if !state.CanAddGuest() {
-			log.Printf("Turned away guest, park is at capacity")
+			slog.Info("Turned away guest, park is at capacity")
 			http.Error(w, "Park is at capacity", http.StatusBadRequest)
 			return
 		}
 
 		// Process entrance fee
 		state.AddMoney(state.GetEntranceFee())
-		log.Printf("Accepted guest")
+		slog.Info("Accepted guest")
 		w.WriteHeader(http.StatusOK)
 	}
 }

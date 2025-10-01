@@ -4,14 +4,14 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"log"
-	"math/rand/v2"
-	"net/http"
-	"time"
-
 	"kubepark/pkg/constants"
 	"kubepark/pkg/httptypes"
 	"kubepark/pkg/k8s"
+	"kubepark/pkg/logger"
+	"log/slog"
+	"math/rand/v2"
+	"net/http"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -29,10 +29,14 @@ type Attraction struct {
 func New(config *Config, defaultFee float64, afterUse func() error) *Attraction {
 	RegisterFlags(config, defaultFee)
 
+	// Initialize logger with configured level
+	logger.InitLogger(config.LogLevel)
+
 	// Initialize state manager
 	state, err := NewStateManager(config.VolumePath)
 	if err != nil {
-		log.Fatalf("Failed to initialize state manager: %v", err)
+		slog.Error("Failed to initialize state manager", "error", err)
+		panic(err)
 	}
 
 	r := prometheus.NewRegistry()
@@ -121,29 +125,30 @@ func (a *Attraction) BeforeStart() error {
 		return fmt.Errorf("failed to pay for build: %v", err)
 	}
 
-	log.Printf("Successfully started %s", a.Config.Name)
+	slog.Info("Successfully started attraction", "name", a.Config.Name)
 	return nil
 }
 
 // Start starts both the metrics and main HTTP servers
 func (a *Attraction) Start() error {
 	// Register with park
-	log.Printf("Checking if attraction can start")
+	slog.Info("Checking if attraction can start")
 	if err := a.BeforeStart(); err != nil {
 		return fmt.Errorf("failed check to see if attraction can start: %v", err)
 	}
 
 	// Start metrics server
 	go func() {
-		log.Printf("Starting metrics server on port 9000")
+		slog.Info("Starting metrics server on port 9000")
 		if err := a.MetricsServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatal(err)
+			slog.Error("Metrics server failed", "error", err)
+			panic(err)
 		}
 	}()
 
 	// Start the attraction simulation loop
 	go func() {
-		log.Printf("Starting attraction simulation loop")
+		slog.Info("Starting attraction simulation loop")
 		ticker := time.NewTicker(time.Second)
 		defer ticker.Stop()
 
@@ -156,7 +161,7 @@ func (a *Attraction) Start() error {
 	}()
 
 	// Start main server
-	log.Printf("Starting main server on port 80")
+	slog.Info("Starting main server on port 80")
 	return a.MainServer.ListenAndServe()
 }
 
@@ -221,7 +226,7 @@ func handleUse(config *Config, state *StateManager, afterUse func() error) http.
 
 		// Process payment with kubepark
 		if err := PayPark(config, config.Fee); err != nil {
-			log.Printf("Failed to process payment: %v", err)
+			slog.Error("Failed to process payment", "error", err)
 			Metrics.AttractionAttempts.WithLabelValues("false", "payment_failed").Inc()
 			http.Error(w, "Payment failed", http.StatusInternalServerError)
 			return
@@ -233,7 +238,7 @@ func handleUse(config *Config, state *StateManager, afterUse func() error) http.
 		// Call after use hook if set
 		if afterUse != nil {
 			if err := afterUse(); err != nil {
-				log.Printf("After use hook failed: %v", err)
+				slog.Error("After use hook failed", "error", err)
 				Metrics.AttractionAttempts.WithLabelValues("false", "hook_failed").Inc()
 				http.Error(w, "Failed to cleanup attraction", http.StatusInternalServerError)
 				return

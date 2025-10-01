@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"time"
 
 	"kubepark/attractions/base"
@@ -30,12 +30,15 @@ func New() *Restroom {
 
 // afterUse is called after using the restroom
 func afterUse() error {
-	log.Printf("Cleaning up restroom after use")
+	slog.Debug("Cleaning up restroom after use")
 	return nil
 }
 
 func main() {
 	restroom := New()
-	log.Printf("Starting restroom attraction with park URL: %s", restroom.Config.ParkURL)
-	log.Fatal(restroom.Start())
+	slog.Info("Starting restroom attraction", "park_url", restroom.Config.ParkURL)
+	if err := restroom.Start(); err != nil {
+		slog.Error("Restroom attraction failed to start", "error", err)
+		panic(err)
+	}
 }

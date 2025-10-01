@@ -1,7 +1,7 @@
 package main
 
 import (
-	"log"
+	"log/slog"
 	"time"
 
 	"kubepark/attractions/base"
@@ -30,12 +30,15 @@ func New() *Carousel {
 
 // afterUse is called after using the carousel
 func afterUse() error {
-	log.Printf("Cleaning up carousel after use")
+	slog.Debug("Cleaning up carousel after use")
 	return nil
 }
 
 func main() {
 	carousel := New()
-	log.Printf("Starting carousel attraction with park URL: %s", carousel.Config.ParkURL)
-	log.Fatal(carousel.Start())
+	slog.Info("Starting carousel attraction", "park_url", carousel.Config.ParkURL)
+	if err := carousel.Start(); err != nil {
+		slog.Error("Carousel attraction failed to start", "error", err)
+		panic(err)
+	}
 }
