@@ -108,7 +108,10 @@ func (p *Park) Start() error {
 
 		for range ticker.C {
 			// Speed up simulation time
-			p.State.SetTime(p.State.GetTime().Add(time.Second * 100))
+			err := p.State.SetTime(p.State.GetTime().Add(time.Second * 100))
+			if err != nil {
+				slog.Error("Failed to set time", "error", err)
+			}
 
 			// Update metrics
 			metrics.Time.Set(float64(p.State.GetTime().Unix()))

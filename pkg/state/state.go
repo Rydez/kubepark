@@ -3,7 +3,6 @@ package state
 import (
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
 	"path/filepath"
 	"sync"
@@ -57,9 +56,6 @@ func (s *Manager) Load() error {
 
 // Save saves the state to disk
 func (s *Manager) Save() error {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
 	if s.volumePath == "" {
 		return nil
 	}
@@ -89,7 +85,6 @@ func (s *Manager) Save() error {
 func (s *Manager) Get() interface{} {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	slog.Debug("Getting state", "state", s.state)
 	return s.state
 }
 
@@ -97,7 +92,6 @@ func (s *Manager) Get() interface{} {
 func (s *Manager) Set(newState interface{}) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	slog.Debug("Setting state", "state", newState)
 	s.state = newState
 	return s.Save()
 }
