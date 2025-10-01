@@ -121,8 +121,13 @@ func (p *Park) Start() error {
 			isClosed := currentHour < p.Config.OpensAt || currentHour >= p.Config.ClosesAt
 
 			if isClosed {
-				if err := p.GuestManager.CleanupJobs(ctx); err != nil {
-					slog.Warn("Failed to cleanup all jobs during closed hours", "error", err)
+				foundJobs, err := p.GuestManager.CleanupJobs(ctx)
+				if err != nil {
+					slog.Error("Failed to cleanup all jobs during closed hours", "error", err)
+				}
+
+				if foundJobs > 0 {
+					slog.Info("Removed guests after park closed", "count", foundJobs)
 				}
 
 				continue

@@ -68,10 +68,10 @@ func (m *GuestJobManager) CreateGuestJob(ctx context.Context, image string, park
 }
 
 // CleanupJobs removes all jobs
-func (m *GuestJobManager) CleanupJobs(ctx context.Context) error {
+func (m *GuestJobManager) CleanupJobs(ctx context.Context) (int, error) {
 	jobs, err := m.clientset.BatchV1().Jobs("guests").List(ctx, metav1.ListOptions{})
 	if err != nil {
-		return fmt.Errorf("failed to list jobs: %w", err)
+		return 0, fmt.Errorf("failed to list jobs: %w", err)
 	}
 
 	backgroundDeletion := metav1.DeletePropagationBackground
@@ -80,11 +80,11 @@ func (m *GuestJobManager) CleanupJobs(ctx context.Context) error {
 			PropagationPolicy: &backgroundDeletion,
 		})
 		if err != nil {
-			return fmt.Errorf("failed to delete job %s: %w", job.Name, err)
+			return len(jobs.Items), fmt.Errorf("failed to delete job %s: %w", job.Name, err)
 		}
 	}
 
-	return nil
+	return len(jobs.Items), nil
 }
 
 // int32Ptr returns a pointer to the given int32 value
