@@ -1,0 +1,31 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: park-cluster-admin
+  labels:
+    app.kubernetes.io/name: kubepark
+    app.kubernetes.io/component: park
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: park
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: guests-cluster-admin
+  labels:
+    app.kubernetes.io/name: kubepark
+    app.kubernetes.io/component: guests
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: guests
+roleRef:
+  kind: ClusterRole
+  name: cluster-admin
+  apiGroup: rbac.authorization.k8s.io

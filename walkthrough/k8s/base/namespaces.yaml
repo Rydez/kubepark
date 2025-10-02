@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: park
+  labels:
+    app.kubernetes.io/name: kubepark
+    app.kubernetes.io/component: park
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: attractions
+  labels:
+    app.kubernetes.io/name: kubepark
+    app.kubernetes.io/component: attractions
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: guests
+  labels:
+    app.kubernetes.io/name: kubepark
+    app.kubernetes.io/component: guests
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: alloy
+  labels:
+    app.kubernetes.io/name: kubepark
+    app.kubernetes.io/component: observability

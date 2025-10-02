@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: carousel
+  namespace: attractions
+  labels:
+    app.kubernetes.io/name: kubepark
+    app.kubernetes.io/component: attraction
+    app.kubernetes.io/instance: carousel
+    app: carousel
+    attraction: carousel
+spec:
+  strategy:
+    type: Recreate
+  replicas: 1
+  selector:
+    matchLabels:
+      app: carousel
+  template:
+    metadata:
+      labels:
+        app: carousel
+        app.kubernetes.io/name: kubepark
+        app.kubernetes.io/component: attraction
+        app.kubernetes.io/instance: carousel
+        attraction: carousel
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9000"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+        - name: carousel
+          image: localhost:5001/kubepark:latest
+          ports:
+            - containerPort: 80
+              name: http
+            - containerPort: 9000
+              name: metrics
+          command: ["carousel"]
+          args:
+            - "--park-url"
+            - "http://park.park.svc.cluster.local."
+          livenessProbe:
+            httpGet:
+              path: /attraction-status
+              port: 80
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /attraction-status
+              port: 80
+            initialDelaySeconds: 5
+            periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: carousel
+  namespace: attractions
+  labels:
+    app.kubernetes.io/name: kubepark
+    app.kubernetes.io/component: attraction
+    app.kubernetes.io/instance: carousel
+    app: carousel
+    attraction: carousel
+spec:
+  selector:
+    app: carousel
+  ports:
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 80
+      nodePort: 30081
+    - name: metrics
+      protocol: TCP
+      port: 9000
+      targetPort: 9000
+      nodePort: 30091
+  type: NodePort
