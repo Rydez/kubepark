@@ -103,6 +103,10 @@ func (a *Attraction) BeforeStart() error {
 		return nil
 	}
 
+	if a.State.IsPurchased() {
+		return nil
+	}
+
 	if !park.IsClosed {
 		return fmt.Errorf("cannot build attraction when park is open")
 	}
@@ -127,6 +131,11 @@ func (a *Attraction) BeforeStart() error {
 
 	if err := ParkTransaction(a.Config, -a.Config.BuildCost); err != nil {
 		return fmt.Errorf("failed to pay for build: %v", err)
+	}
+
+	err = a.State.SetPurchased(true)
+	if err != nil {
+		return fmt.Errorf("failed to set attraction purchased: %v", err)
 	}
 
 	slog.Info("Successfully built new attraction", "name", a.Config.Name)
