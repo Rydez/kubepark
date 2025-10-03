@@ -1,12 +1,12 @@
-# PersistentVolume for Restroom
+# PersistentVolume for Attraction
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: restroom-pv-${INSTANCE_ID}
+  name: ${ATTRACTION_TYPE}-pv-${INSTANCE_ID}
   labels:
     app.kubernetes.io/name: kubepark
     app.kubernetes.io/component: attraction
-    app.kubernetes.io/instance: restroom-${INSTANCE_ID}
+    app.kubernetes.io/instance: ${ATTRACTION_TYPE}-${INSTANCE_ID}
 spec:
   capacity:
     storage: 1Gi
@@ -15,20 +15,20 @@ spec:
   persistentVolumeReclaimPolicy: Retain
   storageClassName: local-storage
   hostPath:
-    path: /tmp/kubepark/attractions/restroom-${INSTANCE_ID}
+    path: /tmp/kubepark/attractions/${ATTRACTION_TYPE}-${INSTANCE_ID}
     type: DirectoryOrCreate
 
 ---
-# PersistentVolumeClaim for Restroom
+# PersistentVolumeClaim for Attraction
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: restroom-pvc-${INSTANCE_ID}
+  name: ${ATTRACTION_TYPE}-pvc-${INSTANCE_ID}
   namespace: attractions
   labels:
     app.kubernetes.io/name: kubepark
     app.kubernetes.io/component: attraction
-    app.kubernetes.io/instance: restroom-${INSTANCE_ID}
+    app.kubernetes.io/instance: ${ATTRACTION_TYPE}-${INSTANCE_ID}
 spec:
   accessModes:
     - ReadWriteOnce
@@ -41,29 +41,29 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: restroom-${INSTANCE_ID}
+  name: ${ATTRACTION_TYPE}-${INSTANCE_ID}
   namespace: attractions
   labels:
     app.kubernetes.io/name: kubepark
     app.kubernetes.io/component: attraction
-    app.kubernetes.io/instance: restroom-${INSTANCE_ID}
-    app: restroom-${INSTANCE_ID}
-    attraction: restroom
+    app.kubernetes.io/instance: ${ATTRACTION_TYPE}-${INSTANCE_ID}
+    app: ${ATTRACTION_TYPE}-${INSTANCE_ID}
+    attraction: ${ATTRACTION_TYPE}
 spec:
   strategy:
     type: Recreate
   replicas: 1
   selector:
     matchLabels:
-      app: restroom-${INSTANCE_ID}
+      app: ${ATTRACTION_TYPE}-${INSTANCE_ID}
   template:
     metadata:
       labels:
-        app: restroom-${INSTANCE_ID}
+        app: ${ATTRACTION_TYPE}-${INSTANCE_ID}
         app.kubernetes.io/name: kubepark
         app.kubernetes.io/component: attraction
-        app.kubernetes.io/instance: restroom-${INSTANCE_ID}
-        attraction: restroom
+        app.kubernetes.io/instance: ${ATTRACTION_TYPE}-${INSTANCE_ID}
+        attraction: ${ATTRACTION_TYPE}
       annotations:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9000"
@@ -77,26 +77,26 @@ spec:
           command:
             ["sh", "-c", "chown -R 1000:1000 /data && chmod -R 755 /data"]
           volumeMounts:
-            - name: restroom-storage-${INSTANCE_ID}
+            - name: ${ATTRACTION_TYPE}-storage-${INSTANCE_ID}
               mountPath: /data
           securityContext:
             runAsUser: 0
       containers:
-        - name: restroom
+        - name: ${ATTRACTION_TYPE}
           image: localhost:5001/kubepark:latest
           ports:
             - containerPort: 80
               name: http
             - containerPort: 9000
               name: metrics
-          command: ["restroom"]
+          command: ["${ATTRACTION_TYPE}"]
           args:
             - "--park-url"
             - "http://park.park.svc.cluster.local."
             - "--volume"
             - "/data"
           volumeMounts:
-            - name: restroom-storage-${INSTANCE_ID}
+            - name: ${ATTRACTION_TYPE}-storage-${INSTANCE_ID}
               mountPath: /data
           securityContext:
             runAsUser: 1000
@@ -114,24 +114,24 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 5
       volumes:
-        - name: restroom-storage-${INSTANCE_ID}
+        - name: ${ATTRACTION_TYPE}-storage-${INSTANCE_ID}
           persistentVolumeClaim:
-            claimName: restroom-pvc-${INSTANCE_ID}
+            claimName: ${ATTRACTION_TYPE}-pvc-${INSTANCE_ID}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: restroom-${INSTANCE_ID}
+  name: ${ATTRACTION_TYPE}-${INSTANCE_ID}
   namespace: attractions
   labels:
     app.kubernetes.io/name: kubepark
     app.kubernetes.io/component: attraction
-    app.kubernetes.io/instance: restroom-${INSTANCE_ID}
-    app: restroom-${INSTANCE_ID}
-    attraction: restroom
+    app.kubernetes.io/instance: ${ATTRACTION_TYPE}-${INSTANCE_ID}
+    app: ${ATTRACTION_TYPE}-${INSTANCE_ID}
+    attraction: ${ATTRACTION_TYPE}
 spec:
   selector:
-    app: restroom-${INSTANCE_ID}
+    app: ${ATTRACTION_TYPE}-${INSTANCE_ID}
   ports:
     - name: http
       protocol: TCP

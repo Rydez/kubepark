@@ -66,8 +66,9 @@ deploy-park:
 deploy-carousel:
 	@echo "🎠 Deploying carousel attraction..."
 	@INSTANCE_ID=$$(date +%s)-$$(shuf -i 1000-9999 -n 1); \
-	export INSTANCE_ID; \
-	envsubst < k8s/attractions/carousel.yaml | kubectl apply -f -
+	ATTRACTION_TYPE=carousel; \
+	export INSTANCE_ID ATTRACTION_TYPE; \
+	envsubst < k8s/attraction.yaml | kubectl apply -f -
 	@echo "⏳ Waiting for carousel to be ready..."
 	@INSTANCE_NAME=$$(kubectl get deployments -n attractions -l attraction=carousel --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.name}'); \
 	kubectl wait --for=condition=available --timeout=60s deployment/$$INSTANCE_NAME -n attractions
@@ -87,8 +88,9 @@ list-carousels:
 deploy-restroom:
 	@echo "🚻 Deploying restroom attraction..."
 	@INSTANCE_ID=$$(date +%s)-$$(shuf -i 1000-9999 -n 1); \
-	export INSTANCE_ID; \
-	envsubst < k8s/attractions/restroom.yaml | kubectl apply -f -
+	ATTRACTION_TYPE=restroom; \
+	export INSTANCE_ID ATTRACTION_TYPE; \
+	envsubst < k8s/attraction.yaml | kubectl apply -f -
 	@echo "⏳ Waiting for restroom to be ready..."
 	@INSTANCE_NAME=$$(kubectl get deployments -n attractions -l attraction=restroom --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.name}'); \
 	kubectl wait --for=condition=available --timeout=60s deployment/$$INSTANCE_NAME -n attractions
