@@ -2,11 +2,11 @@
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: restroom-pv
+  name: restroom-pv-${INSTANCE_ID}
   labels:
     app.kubernetes.io/name: kubepark
     app.kubernetes.io/component: attraction
-    app.kubernetes.io/instance: restroom
+    app.kubernetes.io/instance: restroom-${INSTANCE_ID}
 spec:
   capacity:
     storage: 1Gi
@@ -15,7 +15,7 @@ spec:
   persistentVolumeReclaimPolicy: Retain
   storageClassName: local-storage
   hostPath:
-    path: /tmp/kubepark/attractions/restroom
+    path: /tmp/kubepark/attractions/restroom-${INSTANCE_ID}
     type: DirectoryOrCreate
 
 ---
@@ -23,12 +23,12 @@ spec:
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: restroom-pvc
+  name: restroom-pvc-${INSTANCE_ID}
   namespace: attractions
   labels:
     app.kubernetes.io/name: kubepark
     app.kubernetes.io/component: attraction
-    app.kubernetes.io/instance: restroom
+    app.kubernetes.io/instance: restroom-${INSTANCE_ID}
 spec:
   accessModes:
     - ReadWriteOnce
@@ -41,13 +41,13 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: restroom
+  name: restroom-${INSTANCE_ID}
   namespace: attractions
   labels:
     app.kubernetes.io/name: kubepark
     app.kubernetes.io/component: attraction
-    app.kubernetes.io/instance: restroom
-    app: restroom
+    app.kubernetes.io/instance: restroom-${INSTANCE_ID}
+    app: restroom-${INSTANCE_ID}
     attraction: restroom
 spec:
   strategy:
@@ -55,14 +55,14 @@ spec:
   replicas: 1
   selector:
     matchLabels:
-      app: restroom
+      app: restroom-${INSTANCE_ID}
   template:
     metadata:
       labels:
-        app: restroom
+        app: restroom-${INSTANCE_ID}
         app.kubernetes.io/name: kubepark
         app.kubernetes.io/component: attraction
-        app.kubernetes.io/instance: restroom
+        app.kubernetes.io/instance: restroom-${INSTANCE_ID}
         attraction: restroom
       annotations:
         prometheus.io/scrape: "true"
@@ -77,7 +77,7 @@ spec:
           command:
             ["sh", "-c", "chown -R 1000:1000 /data && chmod -R 755 /data"]
           volumeMounts:
-            - name: restroom-storage
+            - name: restroom-storage-${INSTANCE_ID}
               mountPath: /data
           securityContext:
             runAsUser: 0
@@ -96,7 +96,7 @@ spec:
             - "--volume"
             - "/data"
           volumeMounts:
-            - name: restroom-storage
+            - name: restroom-storage-${INSTANCE_ID}
               mountPath: /data
           securityContext:
             runAsUser: 1000
@@ -114,33 +114,31 @@ spec:
             initialDelaySeconds: 5
             periodSeconds: 5
       volumes:
-        - name: restroom-storage
+        - name: restroom-storage-${INSTANCE_ID}
           persistentVolumeClaim:
-            claimName: restroom-pvc
+            claimName: restroom-pvc-${INSTANCE_ID}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: restroom
+  name: restroom-${INSTANCE_ID}
   namespace: attractions
   labels:
     app.kubernetes.io/name: kubepark
     app.kubernetes.io/component: attraction
-    app.kubernetes.io/instance: restroom
-    app: restroom
+    app.kubernetes.io/instance: restroom-${INSTANCE_ID}
+    app: restroom-${INSTANCE_ID}
     attraction: restroom
 spec:
   selector:
-    app: restroom
+    app: restroom-${INSTANCE_ID}
   ports:
     - name: http
       protocol: TCP
       port: 80
       targetPort: 80
-      nodePort: 30082
     - name: metrics
       protocol: TCP
       port: 9000
       targetPort: 9000
-      nodePort: 30092
-  type: NodePort
+  type: ClusterIP

@@ -1,4 +1,4 @@
-.PHONY: help setup build deploy-park deploy-carousel deploy-restroom status logs clean open-grafana restart-monitoring reload-dashboards reset-dashboards
+.PHONY: help setup build deploy-park deploy-carousel deploy-restroom list-restrooms remove-restrooms status logs clean open-grafana restart-monitoring reload-dashboards reset-dashboards
 
 # Default target
 help:
@@ -11,7 +11,9 @@ help:
 	@echo "Game Commands:"
 	@echo "  deploy-park     Start the park (begins the game!)"
 	@echo "  deploy-carousel Deploy carousel attraction"
-	@echo "  deploy-restroom Deploy restroom attraction"
+	@echo "  deploy-restroom Deploy restroom attraction (creates new instance each time)"
+	@echo "  list-restrooms  Show all deployed restroom instances"
+	@echo "  remove-restrooms Remove all restroom instances"
 	@echo ""
 	@echo "Monitoring:"
 	@echo "  status          Show current park status"
@@ -63,19 +65,43 @@ deploy-park:
 # Deploy carousel attraction
 deploy-carousel:
 	@echo "🎠 Deploying carousel attraction..."
-	@kubectl apply -f k8s/attractions/carousel.yaml
+	@INSTANCE_ID=$$(date +%s)-$$(shuf -i 1000-9999 -n 1); \
+	export INSTANCE_ID; \
+	envsubst < k8s/attractions/carousel.yaml | kubectl apply -f -
 	@echo "⏳ Waiting for carousel to be ready..."
-	@kubectl wait --for=condition=available --timeout=60s deployment/carousel -n attractions
+	@INSTANCE_NAME=$$(kubectl get deployments -n attractions -l attraction=carousel --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.name}'); \
+	kubectl wait --for=condition=available --timeout=60s deployment/$$INSTANCE_NAME -n attractions
 	@echo "✅ Carousel is operational!"
+
+# List all restroom instances
+list-carousels:
+	@echo "🚻 Deployed Carousel Instances:"
+	@echo "==============================="
+	@kubectl get deployments,services -n attractions -l attraction=carousel --no-headers 2>/dev/null | \
+	awk '{print "📍 " $$1 " - " $$2}' || echo "No carousels deployed yet"
+	@echo ""
+	@echo "💡 Run 'make deploy-carousel' to add more carousels to your park!"
+
 
 # Deploy restroom attraction
 deploy-restroom:
 	@echo "🚻 Deploying restroom attraction..."
-	@kubectl apply -f k8s/attractions/restroom.yaml
+	@INSTANCE_ID=$$(date +%s)-$$(shuf -i 1000-9999 -n 1); \
+	export INSTANCE_ID; \
+	envsubst < k8s/attractions/restroom.yaml | kubectl apply -f -
 	@echo "⏳ Waiting for restroom to be ready..."
-	@kubectl wait --for=condition=available --timeout=60s deployment/restroom -n attractions
+	@INSTANCE_NAME=$$(kubectl get deployments -n attractions -l attraction=restroom --sort-by=.metadata.creationTimestamp -o jsonpath='{.items[-1].metadata.name}'); \
+	kubectl wait --for=condition=available --timeout=60s deployment/$$INSTANCE_NAME -n attractions
 	@echo "✅ Restroom is operational!"
 
+# List all restroom instances
+list-restrooms:
+	@echo "🚻 Deployed Restroom Instances:"
+	@echo "==============================="
+	@kubectl get deployments,services -n attractions -l attraction=restroom --no-headers 2>/dev/null | \
+	awk '{print "📍 " $$1 " - " $$2}' || echo "No restrooms deployed yet"
+	@echo ""
+	@echo "💡 Run 'make deploy-restroom' to add more restrooms to your park!"
 
 # Show status
 status:
