@@ -1,3 +1,41 @@
+# PersistentVolume for Park
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: park-pv
+  labels:
+    app.kubernetes.io/name: kubepark
+    app.kubernetes.io/component: park
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  hostPath:
+    path: /tmp/kubepark/park
+    type: DirectoryOrCreate
+
+---
+# PersistentVolumeClaim for Park
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: park-pvc
+  namespace: park
+  labels:
+    app.kubernetes.io/name: kubepark
+    app.kubernetes.io/component: park
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: local-storage
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -25,6 +63,18 @@ spec:
         prometheus.io/port: "9000"
         prometheus.io/path: "/metrics"
     spec:
+      securityContext:
+        fsGroup: 1000
+      initContainers:
+        - name: volume-permissions
+          image: busybox:1.35
+          command:
+            ["sh", "-c", "chown -R 1000:1000 /data && chmod -R 755 /data"]
+          volumeMounts:
+            - name: park-storage
+              mountPath: /data
+          securityContext:
+            runAsUser: 0
       containers:
         - name: park
           image: localhost:5001/kubepark:latest
@@ -45,6 +95,14 @@ spec:
             - "20"
             - "--log-level"
             - "debug"
+            - "--volume"
+            - "/data"
+          volumeMounts:
+            - name: park-storage
+              mountPath: /data
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
           livenessProbe:
             httpGet:
               path: /park-status
@@ -57,6 +115,10 @@ spec:
               port: 80
             initialDelaySeconds: 5
             periodSeconds: 5
+      volumes:
+        - name: park-storage
+          persistentVolumeClaim:
+            claimName: park-pvc
 ---
 apiVersion: v1
 kind: Service

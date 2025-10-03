@@ -70,9 +70,9 @@ func New() *Park {
 
 	// Create main server on port 80
 	mainMux := http.NewServeMux()
-	mainMux.HandleFunc("/park-status", handleParkStatus(state))
-	mainMux.HandleFunc("/pay", handlePayPark(state))
-	mainMux.HandleFunc("/enter", handleEnterPark(state))
+	mainMux.HandleFunc("/park-status", handleStatus(config, state))
+	mainMux.HandleFunc("/transaction", handleTransaction(state))
+	mainMux.HandleFunc("/enter", handleEnter(state))
 	mainServer := &http.Server{
 		Addr:    ":80",
 		Handler: mainMux,
@@ -107,20 +107,19 @@ func (p *Park) Start() error {
 		ctx := context.Background()
 
 		for range ticker.C {
+			time := p.State.GetTime().Add(time.Second * 100)
+
 			// Speed up simulation time
-			err := p.State.SetTime(p.State.GetTime().Add(time.Second * 100))
+			err := p.State.SetTime(time)
 			if err != nil {
 				slog.Error("Failed to set time", "error", err)
 			}
 
 			// Update metrics
-			metrics.Time.Set(float64(p.State.GetTime().Unix()))
+			metrics.Time.Set(float64(time.Unix()))
 			metrics.Money.Set(p.State.GetMoney())
 
-			currentHour := p.State.GetTime().Hour()
-			isClosed := currentHour < p.Config.OpensAt || currentHour >= p.Config.ClosesAt
-
-			if isClosed {
+			if isClosed(p.Config, time) {
 				foundJobs, err := p.GuestManager.CleanupJobs(ctx)
 				if err != nil {
 					slog.Error("Failed to cleanup all jobs during closed hours", "error", err)
@@ -196,4 +195,9 @@ func checkForExistingPark() error {
 	}
 
 	return nil
+}
+
+func isClosed(config *Config, time time.Time) bool {
+	hour := time.Hour()
+	return config.Closed || hour < config.OpensAt || hour >= config.ClosesAt
 }

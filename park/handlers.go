@@ -8,8 +8,8 @@ import (
 	"kubepark/pkg/httptypes"
 )
 
-// handleParkStatus handles requests to check if this is a park service
-func handleParkStatus(state *StateManager) http.HandlerFunc {
+// handleStatus handles requests to check if this is a park service
+func handleStatus(config *Config, state *StateManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
@@ -18,21 +18,22 @@ func handleParkStatus(state *StateManager) http.HandlerFunc {
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(httptypes.Park{
+			IsClosed:   isClosed(config, state.GetTime()),
 			TotalSpace: state.GetTotalSpace(),
 			Money:      state.GetMoney(),
 		})
 	}
 }
 
-// handlePayPark handles payment requests from attractions
-func handlePayPark(state *StateManager) http.HandlerFunc {
+// handleTransaction handles payment requests from attractions
+func handleTransaction(state *StateManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
 
-		var req httptypes.PayParkRequest
+		var req httptypes.TransactionRequest
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 			http.Error(w, "Invalid request body", http.StatusBadRequest)
 			return
@@ -44,25 +45,11 @@ func handlePayPark(state *StateManager) http.HandlerFunc {
 	}
 }
 
-// handleEnterPark handles guest entry requests
-func handleEnterPark(state *StateManager) http.HandlerFunc {
+// handleEnter handles guest entry requests
+func handleEnter(state *StateManager) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		// Check if park is closed
-		if state.IsClosed() {
-			slog.Info("Turned away guest, park is closed")
-			http.Error(w, "Park is closed", http.StatusBadRequest)
-			return
-		}
-
-		// Check if park is at capacity
-		if !state.CanAddGuest() {
-			slog.Info("Turned away guest, park is at capacity")
-			http.Error(w, "Park is at capacity", http.StatusBadRequest)
 			return
 		}
 

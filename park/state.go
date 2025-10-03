@@ -10,15 +10,9 @@ import (
 type ParkState struct {
 	Money       float64   `json:"money"`
 	CurrentTime time.Time `json:"current_time"`
-	LastSaved   time.Time `json:"last_saved"`
 	Mode        string    `json:"mode"`
 	EntranceFee float64   `json:"entrance_fee"`
-	OpensAt     int       `json:"opens_at"`
-	ClosesAt    int       `json:"closes_at"`
-	Closed      bool      `json:"closed"`
 	TotalSpace  float64   `json:"total_space"` // Total park space in acres
-	UsedSpace   float64   `json:"used_space"`  // Used space in acres
-	GuestSize   float64   `json:"guest_size"`  // Size of each guest in acres
 }
 
 // StateManager manages the attraction's persistent state
@@ -33,10 +27,6 @@ func NewStateManager(config *Config) (*StateManager, error) {
 		CurrentTime: time.Now(),
 		Mode:        config.Mode,
 		EntranceFee: config.EntranceFee,
-		OpensAt:     config.OpensAt,
-		ClosesAt:    config.ClosesAt,
-		Closed:      config.Closed,
-		GuestSize:   0.1, // Each guest takes 0.1 acres
 	}
 
 	// Set total space based on mode
@@ -104,49 +94,6 @@ func (s *StateManager) SetTime(t time.Time) error {
 	return s.set(func(state *ParkState) {
 		state.CurrentTime = t
 	})
-}
-
-// SetClosed sets whether the park is closed
-func (s *StateManager) SetClosed(closed bool) error {
-	return s.set(func(state *ParkState) {
-		state.Closed = closed
-	})
-}
-
-// IsClosed returns whether the park is closed
-func (s *StateManager) IsClosed() bool {
-	return s.get().Closed
-}
-
-// CanAddGuest checks if there's enough space for a new guest
-func (s *StateManager) CanAddGuest() bool {
-	usedSpace := s.get().UsedSpace
-	guestSize := s.get().GuestSize
-	totalSpace := s.get().TotalSpace
-	return usedSpace+guestSize <= totalSpace
-}
-
-// AddGuest adds a guest to the park
-func (s *StateManager) AddGuest() error {
-	if !s.CanAddGuest() {
-		return fmt.Errorf("not enough space in park for guest. Need %.1f acres but only have %.1f acres available", s.get().GuestSize, s.get().TotalSpace-s.get().UsedSpace)
-	}
-
-	return s.set(func(state *ParkState) {
-		state.UsedSpace += state.GuestSize
-	})
-}
-
-// RemoveGuest removes a guest from the park
-func (s *StateManager) RemoveGuest() error {
-	return s.set(func(state *ParkState) {
-		state.UsedSpace -= state.GuestSize
-	})
-}
-
-// GetAvailableSpace returns the amount of space available in the park
-func (s *StateManager) GetAvailableSpace() float64 {
-	return s.get().TotalSpace - s.get().UsedSpace
 }
 
 // GetTotalSpace returns the total space in the park

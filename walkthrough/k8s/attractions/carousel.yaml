@@ -1,3 +1,43 @@
+# PersistentVolume for Carousel
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: carousel-pv
+  labels:
+    app.kubernetes.io/name: kubepark
+    app.kubernetes.io/component: attraction
+    app.kubernetes.io/instance: carousel
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  hostPath:
+    path: /tmp/kubepark/attractions/carousel
+    type: DirectoryOrCreate
+
+---
+# PersistentVolumeClaim for Carousel
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: carousel-pvc
+  namespace: attractions
+  labels:
+    app.kubernetes.io/name: kubepark
+    app.kubernetes.io/component: attraction
+    app.kubernetes.io/instance: carousel
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: local-storage
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -29,6 +69,18 @@ spec:
         prometheus.io/port: "9000"
         prometheus.io/path: "/metrics"
     spec:
+      securityContext:
+        fsGroup: 1000
+      initContainers:
+        - name: volume-permissions
+          image: busybox:1.35
+          command:
+            ["sh", "-c", "chown -R 1000:1000 /data && chmod -R 755 /data"]
+          volumeMounts:
+            - name: carousel-storage
+              mountPath: /data
+          securityContext:
+            runAsUser: 0
       containers:
         - name: carousel
           image: localhost:5001/kubepark:latest
@@ -41,6 +93,14 @@ spec:
           args:
             - "--park-url"
             - "http://park.park.svc.cluster.local."
+            - "--volume"
+            - "/data"
+          volumeMounts:
+            - name: carousel-storage
+              mountPath: /data
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
           livenessProbe:
             httpGet:
               path: /attraction-status
@@ -53,6 +113,10 @@ spec:
               port: 80
             initialDelaySeconds: 5
             periodSeconds: 5
+      volumes:
+        - name: carousel-storage
+          persistentVolumeClaim:
+            claimName: carousel-pvc
 ---
 apiVersion: v1
 kind: Service

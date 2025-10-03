@@ -1,3 +1,43 @@
+# PersistentVolume for Restroom
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: restroom-pv
+  labels:
+    app.kubernetes.io/name: kubepark
+    app.kubernetes.io/component: attraction
+    app.kubernetes.io/instance: restroom
+spec:
+  capacity:
+    storage: 1Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: local-storage
+  hostPath:
+    path: /tmp/kubepark/attractions/restroom
+    type: DirectoryOrCreate
+
+---
+# PersistentVolumeClaim for Restroom
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: restroom-pvc
+  namespace: attractions
+  labels:
+    app.kubernetes.io/name: kubepark
+    app.kubernetes.io/component: attraction
+    app.kubernetes.io/instance: restroom
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: local-storage
+
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -29,6 +69,18 @@ spec:
         prometheus.io/port: "9000"
         prometheus.io/path: "/metrics"
     spec:
+      securityContext:
+        fsGroup: 1000
+      initContainers:
+        - name: volume-permissions
+          image: busybox:1.35
+          command:
+            ["sh", "-c", "chown -R 1000:1000 /data && chmod -R 755 /data"]
+          volumeMounts:
+            - name: restroom-storage
+              mountPath: /data
+          securityContext:
+            runAsUser: 0
       containers:
         - name: restroom
           image: localhost:5001/kubepark:latest
@@ -41,6 +93,14 @@ spec:
           args:
             - "--park-url"
             - "http://park.park.svc.cluster.local."
+            - "--volume"
+            - "/data"
+          volumeMounts:
+            - name: restroom-storage
+              mountPath: /data
+          securityContext:
+            runAsUser: 1000
+            runAsGroup: 1000
           livenessProbe:
             httpGet:
               path: /attraction-status
@@ -53,6 +113,10 @@ spec:
               port: 80
             initialDelaySeconds: 5
             periodSeconds: 5
+      volumes:
+        - name: restroom-storage
+          persistentVolumeClaim:
+            claimName: restroom-pvc
 ---
 apiVersion: v1
 kind: Service

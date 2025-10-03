@@ -146,10 +146,6 @@ reset-dashboards:
 # Clean up everything
 clean:
 	@echo "🧹 Cleaning up KubePark..."
-	@kubectl delete namespace park attractions guests alloy --ignore-not-found=true
-	@kubectl delete clusterrolebinding park-cluster-admin guests-cluster-admin --ignore-not-found=true
-	@helm uninstall alloy --namespace alloy --ignore-not-found 2>/dev/null || true
-	@kubectl delete namespace alloy --ignore-not-found=true
 	@docker-compose down -v
 	@kind delete cluster --name kubepark-cluster
 	@docker rm -f kind-registry 2>/dev/null || true
@@ -159,7 +155,7 @@ clean:
 restart-park:
 	@kubectl rollout restart deployment/park -n park
 
-restart-attraction:
+restart-attractions:
 	@kubectl rollout restart deployment/carousel -n attractions || true
 	@kubectl rollout restart deployment/restroom -n attractions || true
 

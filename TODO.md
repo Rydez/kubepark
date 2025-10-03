@@ -1,0 +1,1 @@
+- Stream data like time, money, etc., realtime to the dashboard: https://grafana.com/tutorials/stream-metrics-from-telegraf-to-grafana/

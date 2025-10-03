@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"kubepark/pkg/constants"
 	"kubepark/pkg/httptypes"
 	"kubepark/pkg/k8s"
 	"kubepark/pkg/logger"
@@ -91,9 +90,21 @@ func (a *Attraction) BeforeStart() error {
 			return fmt.Errorf("not enough money to repair attraction")
 		}
 
-		if err := PayPark(a.Config, a.Config.RepairCost); err != nil {
+		if err := ParkTransaction(a.Config, -a.Config.RepairCost); err != nil {
 			return fmt.Errorf("failed to pay for repair: %v", err)
 		}
+
+		err = a.State.SetBroken(false)
+		if err != nil {
+			return fmt.Errorf("failed to set attraction not broken: %v", err)
+		}
+
+		slog.Info("Successfully repaired attraction", "name", a.Config.Name)
+		return nil
+	}
+
+	if !park.IsClosed {
+		return fmt.Errorf("cannot build attraction when park is open")
 	}
 
 	if a.Config.BuildCost > park.Money {
@@ -110,22 +121,15 @@ func (a *Attraction) BeforeStart() error {
 		usedSpace += attraction.Size
 	}
 
-	jobs, err := k8s.DiscoverGuests()
-	if err != nil {
-		return fmt.Errorf("failed to discover guest jobs: %v", err)
-	}
-
-	usedSpace += constants.GuestSize * float64(len(jobs.Items))
-
 	if park.TotalSpace-usedSpace < a.Config.Size {
 		return fmt.Errorf("not enough space in the park")
 	}
 
-	if err := PayPark(a.Config, a.Config.BuildCost); err != nil {
+	if err := ParkTransaction(a.Config, -a.Config.BuildCost); err != nil {
 		return fmt.Errorf("failed to pay for build: %v", err)
 	}
 
-	slog.Info("Successfully started attraction", "name", a.Config.Name)
+	slog.Info("Successfully built new attraction", "name", a.Config.Name)
 	return nil
 }
 
@@ -153,9 +157,13 @@ func (a *Attraction) Start() error {
 		defer ticker.Stop()
 
 		for range ticker.C {
-			// Random chance to break the attraction (1% chance per second)
-			if rand.Float64() < 0.01 {
-				a.State.SetBroken(true)
+			// Random chance to break the attraction (0.1% chance per second)
+			if !a.State.IsBroken() && rand.Float64() < 0.001 {
+				slog.Info("Attraction has broken down", "name", a.Config.Name)
+				err := a.State.SetBroken(true)
+				if err != nil {
+					slog.Error("Failed to set attraction broken", "error", err)
+				}
 			}
 		}
 	}()
@@ -173,15 +181,15 @@ func (a *Attraction) Stop() error {
 	return a.MainServer.Close()
 }
 
-// PayPark processes a payment with the park
-func PayPark(config *Config, amount float64) error {
-	paymentReq := httptypes.PayParkRequest{Amount: amount}
-	paymentData, err := json.Marshal(paymentReq)
+// ParkTransaction processes a transaction with the park
+func ParkTransaction(config *Config, amount float64) error {
+	req := httptypes.TransactionRequest{Amount: amount}
+	data, err := json.Marshal(req)
 	if err != nil {
 		return err
 	}
 
-	resp, err := http.Post(config.ParkURL+"/pay", "application/json", bytes.NewBuffer(paymentData))
+	resp, err := http.Post(config.ParkURL+"/transaction", "application/json", bytes.NewBuffer(data))
 	if err != nil {
 		return err
 	}
@@ -191,7 +199,11 @@ func PayPark(config *Config, amount float64) error {
 		return fmt.Errorf("payment failed with status: %d", resp.StatusCode)
 	}
 
-	Metrics.Revenue.Add(amount)
+	if amount > 0 {
+		Metrics.Revenue.Add(amount)
+	} else {
+		Metrics.Costs.Add(-amount)
+	}
 
 	return nil
 }
@@ -202,50 +214,4 @@ func btof(b bool) float64 {
 		return 1
 	}
 	return 0
-}
-
-// HandleUse handles the common use endpoint functionality
-func handleUse(config *Config, state *StateManager, afterUse func() error) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		if state.IsBroken() {
-			Metrics.AttractionAttempts.WithLabelValues("false", "attraction_broken").Inc()
-			http.Error(w, fmt.Sprintf("%s is broken", config.Name), http.StatusServiceUnavailable)
-			return
-		}
-
-		if config.Closed {
-			Metrics.AttractionAttempts.WithLabelValues("false", "attraction_closed").Inc()
-			http.Error(w, fmt.Sprintf("%s is closed", config.Name), http.StatusServiceUnavailable)
-			return
-		}
-
-		// Process payment with kubepark
-		if err := PayPark(config, config.Fee); err != nil {
-			slog.Error("Failed to process payment", "error", err)
-			Metrics.AttractionAttempts.WithLabelValues("false", "payment_failed").Inc()
-			http.Error(w, "Payment failed", http.StatusInternalServerError)
-			return
-		}
-
-		// Simulate usage duration
-		time.Sleep(config.Duration)
-
-		// Call after use hook if set
-		if afterUse != nil {
-			if err := afterUse(); err != nil {
-				slog.Error("After use hook failed", "error", err)
-				Metrics.AttractionAttempts.WithLabelValues("false", "hook_failed").Inc()
-				http.Error(w, "Failed to cleanup attraction", http.StatusInternalServerError)
-				return
-			}
-		}
-
-		Metrics.AttractionAttempts.WithLabelValues("true", "success").Inc()
-		w.WriteHeader(http.StatusOK)
-	}
 }

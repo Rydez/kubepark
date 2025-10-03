@@ -3,6 +3,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"kubepark/pkg/k8s"
 	"kubepark/pkg/logger"
 	"log/slog"
@@ -138,7 +139,16 @@ func visitAttraction() error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to use attraction %s: %s", randAttraction.URL, resp.Status)
+		// Read the error message from the response body
+		body, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			return fmt.Errorf("failed to use attraction %s: %s", randAttraction.URL, resp.Status)
+		}
+		errorMessage := string(body)
+		if errorMessage == "" {
+			errorMessage = resp.Status
+		}
+		return fmt.Errorf("failed to use attraction %s: %s", randAttraction.URL, errorMessage)
 	}
 
 	// Update metrics and money

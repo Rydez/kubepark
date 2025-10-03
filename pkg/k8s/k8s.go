@@ -88,7 +88,7 @@ func DiscoverGuests() (*v1.JobList, error) {
 	}
 
 	jobs, err := clientset.BatchV1().Jobs("guests").List(context.TODO(), metav1.ListOptions{
-		FieldSelector: "status.active=1",
+		FieldSelector: "status.phase=Running",
 	})
 
 	if err != nil {
