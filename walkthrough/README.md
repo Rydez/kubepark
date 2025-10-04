@@ -2,50 +2,69 @@
 
 Welcome to KubePark! This walkthrough demonstrates a complete Kubernetes observability setup using Grafana Alloy for log and metrics collection.
 
-## What's New: Helm-based Alloy Deployment
-
-We've migrated from manual YAML deployments to using the official Grafana Alloy Helm chart for better management and easier updates.
-
-### Benefits of Using Helm for Alloy:
-
-- **Official Support**: Uses the officially maintained Grafana Helm chart
-- **Easier Updates**: Simple `helm upgrade` commands for configuration changes
-- **Better Management**: Helm tracks deployment history and allows rollbacks
-- **Standardized Configuration**: Follows Helm best practices and conventions
-- **Dependency Management**: Automatic handling of RBAC, ServiceAccount, and other resources
-
 ## Quick Start
 
 1. **Setup the infrastructure:**
 
    ```bash
-   make setup
+   task setup
    ```
 
-   This now uses Helm to deploy Alloy instead of manual YAML files.
+   This uses Helm to deploy Alloy and sets up the complete monitoring stack.
 
 2. **Build and deploy the game:**
 
    ```bash
-   make build
-   make deploy-park
-   make deploy-carousel
-   make deploy-restroom
+   task build
+   task deploy-park
+   task deploy-carousel
+   task deploy-restroom
    ```
 
 3. **Monitor the park:**
    ```bash
-   make status
-   make open-grafana
+   task status
+   task open-grafana
    ```
 
-## Alloy Management Commands
+## Available Commands
 
-The Makefile now includes specific commands for managing Alloy:
+Run `task --list` to see all available commands, or just `task` for help:
 
-- `make restart-alloy` - Restart the Alloy DaemonSet
-- `make upgrade-alloy` - Upgrade Alloy with the latest configuration
-- `make status` - Shows Alloy pod status (now uses correct Helm labels)
+### Setup & Build
+
+- `task setup` - Create Kind cluster and start monitoring stack
+- `task build` - Build and push the game image
+
+### Game Commands
+
+- `task deploy-park` - Start the park (begins the game!)
+- `task deploy-carousel` - Deploy carousel attraction
+- `task deploy-restroom` - Deploy restroom attraction
+- `task list-carousels` - Show all deployed carousel instances
+- `task list-restrooms` - Show all deployed restroom instances
+- `task remove-restrooms` - Remove all restroom instances
+
+### Monitoring
+
+- `task status` - Show current park status
+- `task logs` - View park logs
+- `task open-grafana` - Open Grafana dashboard
+- `task restart-monitoring` - Restart monitoring stack
+- `task restart-alloy` - Restart Alloy log collection
+- `task upgrade-alloy` - Upgrade Alloy with latest configuration
+
+### Cleanup
+
+- `task clean` - Clean up everything
+
+## Alloy Management
+
+Task includes specific commands for managing Alloy:
+
+- `task restart-alloy` - Restart the Alloy DaemonSet
+- `task upgrade-alloy` - Upgrade Alloy with the latest configuration
+- `task status` - Shows Alloy pod status (uses correct Helm labels)
 
 ## Configuration Files
 
@@ -62,14 +81,10 @@ The Helm deployment maintains the same functionality as the previous manual depl
 
 ## Cleanup
 
-The cleanup process now properly removes the Helm deployment:
+The cleanup process properly removes the Helm deployment:
 
 ```bash
-make clean
+task clean
 ```
 
 This will uninstall the Alloy Helm release along with all other resources.
-
----
-
-For detailed game instructions and monitoring setup, see the original README sections below.
