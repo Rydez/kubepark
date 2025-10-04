@@ -17,10 +17,11 @@ tasks:
       - echo "  build           Build and push the game image"
       - echo ""
       - echo "Game Commands:"
-      - echo "  deploy park     Start the park (begins the game!)"
-      - echo "  deploy carousel Deploy carousel attraction"
-      - echo "  deploy restroom Deploy restroom attraction (creates new instance each time)"
-      - echo "  delete <type>   Delete a single attraction instance"
+      - echo "  deploy park              Start the park (begins the game!)"
+      - echo "  deploy carousel          Deploy carousel attraction"
+      - echo "  deploy restroom          Deploy restroom attraction (creates new instance each time)"
+      - echo "  deploy wooden-rollercoaster Deploy wooden rollercoaster attraction"
+      - echo "  delete <type>            Delete a single attraction instance"
       - echo "  list-restrooms  Show all deployed restroom instances"
       - echo "  list-carousels  Show all deployed carousel instances"
       - echo "  remove-restrooms Remove all restroom instances"
@@ -106,9 +107,12 @@ tasks:
           restroom)
             deploy_attraction "🚻" "restroom"
             ;;
+          wooden-rollercoaster)
+            deploy_attraction "🎢" "wooden-rollercoaster"
+            ;;
           *)
             echo "❌ Invalid deployment type: {{.TYPE}}"
-            echo "Valid types: park, carousel, restroom"
+            echo "Valid types: park, carousel, restroom, wooden-rollercoaster"
             echo "Usage: task deploy <type>"
             exit 1
             ;;
@@ -121,7 +125,7 @@ tasks:
     cmds:
       - |
         case "{{.TYPE}}" in
-          carousel|restroom)
+          carousel|restroom|wooden-rollercoaster)
             # Find any instance of this attraction type
             INSTANCE_NAME=$(kubectl get deployments -n attractions -l attraction={{.TYPE}} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
             
@@ -144,12 +148,13 @@ tasks:
             ;;
           *)
             echo "❌ Invalid type: {{.TYPE}}"
-            echo "Valid types: carousel, restroom"
+            echo "Valid types: carousel, restroom, wooden-rollercoaster"
             echo "Usage: task delete <type>"
             echo ""
             echo "Examples:"
-            echo "  task delete carousel   # Delete any carousel instance"
-            echo "  task delete restroom   # Delete any restroom instance"
+            echo "  task delete carousel             # Delete any carousel instance"
+            echo "  task delete restroom             # Delete any restroom instance"
+            echo "  task delete wooden-rollercoaster # Delete any wooden rollercoaster instance"
             exit 1
             ;;
         esac
