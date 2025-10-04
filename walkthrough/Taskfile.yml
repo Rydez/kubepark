@@ -20,6 +20,7 @@ tasks:
       - echo "  deploy park     Start the park (begins the game!)"
       - echo "  deploy carousel Deploy carousel attraction"
       - echo "  deploy restroom Deploy restroom attraction (creates new instance each time)"
+      - echo "  delete <type>   Delete a single attraction instance"
       - echo "  list-restrooms  Show all deployed restroom instances"
       - echo "  list-carousels  Show all deployed carousel instances"
       - echo "  remove-restrooms Remove all restroom instances"
@@ -109,6 +110,46 @@ tasks:
             echo "❌ Invalid deployment type: {{.TYPE}}"
             echo "Valid types: park, carousel, restroom"
             echo "Usage: task deploy <type>"
+            exit 1
+            ;;
+        esac
+
+  delete:
+    desc: "🗑️ Delete a single attraction instance (usage: task delete <type>)"
+    vars:
+      TYPE: "{{.CLI_ARGS | first}}"
+    cmds:
+      - |
+        case "{{.TYPE}}" in
+          carousel|restroom)
+            # Find any instance of this attraction type
+            INSTANCE_NAME=$(kubectl get deployments -n attractions -l attraction={{.TYPE}} -o jsonpath='{.items[0].metadata.name}' 2>/dev/null)
+            
+            if [ -z "$INSTANCE_NAME" ]; then
+              echo "❌ No {{.TYPE}} instances found to delete"
+              exit 1
+            fi
+            
+            echo "🗑️ Deleting {{.TYPE}} instance: $INSTANCE_NAME..."
+            
+            # Extract instance ID from deployment name (format: type-instanceid)
+            INSTANCE_ID=$(echo "$INSTANCE_NAME" | sed 's/{{.TYPE}}-//')
+            
+            # Delete all related resources
+            kubectl delete deployment,service "$INSTANCE_NAME" -n attractions --ignore-not-found=true
+            kubectl delete pvc "{{.TYPE}}-pvc-$INSTANCE_ID" -n attractions --ignore-not-found=true
+            kubectl delete pv "{{.TYPE}}-pv-$INSTANCE_ID" --ignore-not-found=true
+            
+            echo "✅ {{.TYPE}} instance $INSTANCE_NAME deleted!"
+            ;;
+          *)
+            echo "❌ Invalid type: {{.TYPE}}"
+            echo "Valid types: carousel, restroom"
+            echo "Usage: task delete <type>"
+            echo ""
+            echo "Examples:"
+            echo "  task delete carousel   # Delete any carousel instance"
+            echo "  task delete restroom   # Delete any restroom instance"
             exit 1
             ;;
         esac
