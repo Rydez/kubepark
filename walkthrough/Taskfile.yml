@@ -28,8 +28,10 @@ tasks:
       - echo "  status          Show current park status"
       - echo "  logs            View park logs"
       - echo "  open-grafana    Open Grafana dashboard"
-      - echo "  restart-monitoring Restart monitoring stack"
-      - echo "  restart-alloy   Restart Alloy log collection"
+      - echo "  restart monitoring Restart monitoring stack"
+      - echo "  restart alloy   Restart Alloy log collection"
+      - echo "  restart park    Restart park service"
+      - echo "  restart attractions Restart all attractions"
       - echo "  upgrade-alloy   Upgrade Alloy with latest configuration"
       - echo "  reload-dashboards Reload Grafana dashboards"
       - echo "  reset-dashboards Complete dashboard reset (clears cache)"
@@ -111,13 +113,6 @@ tasks:
             ;;
         esac
 
-  remove-restrooms:
-    desc: "🗑️ Remove all restroom instances"
-    cmds:
-      - echo "🗑️ Removing all restroom instances..."
-      - kubectl delete deployments,services -n attractions -l attraction=restroom
-      - echo "✅ All restrooms removed!"
-
   status:
     desc: "🎢 Show current park status"
     cmds:
@@ -157,27 +152,49 @@ tasks:
       - 'echo "Password: admin"'
       - open http://localhost:3000 2>/dev/null || echo "Please open http://localhost:3000 manually"
 
-  restart-monitoring:
-    desc: "🔄 Restart monitoring stack"
+  restart:
+    desc: "🔄 Restart park components (usage: task restart <component>)"
+    vars:
+      COMPONENT: "{{.CLI_ARGS | first}}"
     cmds:
-      - echo "🔄 Restarting monitoring stack..."
-      - echo "Stopping monitoring services..."
-      - docker-compose down
-      - echo "Starting monitoring services..."
-      - docker-compose up -d
-      - echo "⏳ Waiting for services to be ready..."
-      - sleep 15
-      - echo "✅ Monitoring stack restarted!"
-      - 'echo "Grafana: http://localhost:3000 (admin/admin)"'
-      - 'echo "Prometheus: http://localhost:9090"'
-      - 'echo "Loki: http://localhost:3100"'
-
-  restart-alloy:
-    desc: "🔄 Restart Alloy log collection"
-    cmds:
-      - echo "🔄 Restarting Alloy log collection..."
-      - kubectl rollout restart daemonset/alloy -n alloy
-      - echo "✅ Alloy restarted!"
+      - |
+        case "{{.COMPONENT}}" in
+          monitoring)
+            echo "🔄 Restarting monitoring stack..."
+            echo "Stopping monitoring services..."
+            docker-compose down
+            echo "Starting monitoring services..."
+            docker-compose up -d
+            echo "⏳ Waiting for services to be ready..."
+            sleep 15
+            echo "✅ Monitoring stack restarted!"
+            echo "Grafana: http://localhost:3000 (admin/admin)"
+            echo "Prometheus: http://localhost:9090"
+            echo "Loki: http://localhost:3100"
+            ;;
+          alloy)
+            echo "🔄 Restarting Alloy log collection..."
+            kubectl rollout restart daemonset/alloy -n alloy
+            echo "✅ Alloy restarted!"
+            ;;
+          park)
+            echo "🔄 Restarting park service..."
+            kubectl rollout restart deployment/park -n park
+            echo "✅ Park service restarted!"
+            ;;
+          attractions)
+            echo "🔄 Restarting all attractions..."
+            kubectl rollout restart deployment/carousel -n attractions || true
+            kubectl rollout restart deployment/restroom -n attractions || true
+            echo "✅ All attractions restarted!"
+            ;;
+          *)
+            echo "❌ Invalid component: {{.COMPONENT}}"
+            echo "Valid components: monitoring, alloy, park, attractions"
+            echo "Usage: task restart <component>"
+            exit 1
+            ;;
+        esac
 
   upgrade-alloy:
     desc: "⬆️ Upgrade Alloy with latest configuration"
@@ -185,15 +202,6 @@ tasks:
       - echo "⬆️  Upgrading Alloy configuration..."
       - helm upgrade alloy grafana/alloy --namespace alloy --values k8s/alloy-values.yaml --wait
       - echo "✅ Alloy upgraded!"
-
-  reload-dashboards:
-    desc: "🔄 Reload Grafana dashboards"
-    cmds:
-      - echo "🔄 Reloading Grafana dashboards..."
-      - docker-compose restart grafana
-      - echo "⏳ Waiting for Grafana to restart..."
-      - sleep 10
-      - echo "✅ Dashboards reloaded!"
 
   reset-dashboards:
     desc: "🔄 Complete dashboard reset (nuclear option)"
@@ -211,17 +219,6 @@ tasks:
       - sleep 25
       - echo "✅ Grafana reset complete! All dashboards will be freshly loaded."
       - 'echo "Login at http://localhost:3000 with admin/admin"'
-
-  restart-park:
-    desc: "🔄 Restart park service"
-    cmds:
-      - kubectl rollout restart deployment/park -n park
-
-  restart-attractions:
-    desc: "🔄 Restart all attractions"
-    cmds:
-      - kubectl rollout restart deployment/carousel -n attractions || true
-      - kubectl rollout restart deployment/restroom -n attractions || true
 
   clean:
     desc: "🧹 Clean up everything"
