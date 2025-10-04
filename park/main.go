@@ -22,6 +22,7 @@ type Park struct {
 	MainServer    *http.Server
 	State         *StateManager
 	GuestManager  *GuestJobManager
+	GrafanaLive   *GrafanaLiveClient
 }
 
 // New creates a new park simulator
@@ -52,6 +53,9 @@ func New() *Park {
 		slog.Error("Failed to initialize guest job manager", "error", err)
 		panic(err)
 	}
+
+	// Initialize Grafana Live client
+	grafanaLive := NewGrafanaLiveClient(config.GrafanaURL, config.GrafanaAPIKey)
 
 	metrics.EntranceFee.Set(config.EntranceFee)
 	metrics.IsParkClosed.Set(btof(config.Closed))
@@ -84,6 +88,7 @@ func New() *Park {
 		MainServer:    mainServer,
 		State:         state,
 		GuestManager:  guestManager,
+		GrafanaLive:   grafanaLive,
 	}
 }
 
@@ -118,6 +123,14 @@ func (p *Park) Start() error {
 			// Update metrics
 			metrics.Time.Set(float64(time.Unix()))
 			metrics.Money.Set(p.State.GetMoney())
+
+			// Push to Grafana Live
+			if err := p.GrafanaLive.PushMetric("park_time", float64(time.Unix()*1000), nil); err != nil {
+				slog.Warn("Failed to push time metric to Grafana Live", "error", err)
+			}
+			if err := p.GrafanaLive.PushMetric("park_money", p.State.GetMoney(), nil); err != nil {
+				slog.Warn("Failed to push money metric to Grafana Live", "error", err)
+			}
 
 			if isClosed(p.Config, time) {
 				foundJobs, err := p.GuestManager.CleanupJobs(ctx)

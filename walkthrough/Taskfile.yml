@@ -73,7 +73,7 @@ tasks:
   deploy:
     desc: "🎢 Deploy park components (usage: task deploy <type>)"
     vars:
-      TYPE: "{{.CLI_ARGS | first}}"
+      TYPE: "{{.CLI_ARGS}}"
       INSTANCE_ID:
         sh: echo "$(date +%s)-$(shuf -i 1000-9999 -n 1)"
     env:
@@ -96,7 +96,11 @@ tasks:
         case "{{.TYPE}}" in
           park)
             echo "🎪 Starting the park..."
+            echo "🗑️  Cleaning up any existing Grafana Live setup job..."
+            kubectl delete job grafana-live-setup -n park --ignore-not-found=true
             kubectl apply -f k8s/park.yaml
+            echo "⏳ Waiting for Grafana Live setup to complete..."
+            kubectl wait --for=condition=complete --timeout=120s job/grafana-live-setup -n park
             echo "⏳ Waiting for park to be ready..."
             kubectl wait --for=condition=available --timeout=60s deployment/park -n park
             echo "✅ Park is open! Check status with 'task status'"
@@ -121,7 +125,7 @@ tasks:
   delete:
     desc: "🗑️ Delete a single attraction instance (usage: task delete <type>)"
     vars:
-      TYPE: "{{.CLI_ARGS | first}}"
+      TYPE: "{{.CLI_ARGS}}"
     cmds:
       - |
         case "{{.TYPE}}" in
@@ -201,7 +205,7 @@ tasks:
   restart:
     desc: "🔄 Restart park components (usage: task restart <component>)"
     vars:
-      COMPONENT: "{{.CLI_ARGS | first}}"
+      COMPONENT: "{{.CLI_ARGS}}"
     cmds:
       - |
         case "{{.COMPONENT}}" in

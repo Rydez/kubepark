@@ -1,3 +1,167 @@
+# Job to automatically create Grafana API key for Live streaming
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: grafana-live-setup
+  namespace: park
+  labels:
+    app.kubernetes.io/name: kubepark
+    app.kubernetes.io/component: grafana-live-setup
+spec:
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: kubepark
+        app.kubernetes.io/component: grafana-live-setup
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: setup
+          image: alpine:latest
+          command: ["/bin/sh"]
+          args:
+            - -c
+            - |
+              # Install kubectl and curl
+              apk add --no-cache curl
+              curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+              chmod +x kubectl
+              mv kubectl /usr/local/bin/
+
+              echo "🔑 Setting up Grafana Live API key..."
+
+              # Wait for Grafana to be ready
+              echo "⏳ Waiting for Grafana to be ready..."
+              until curl -s -f "http://host.docker.internal:3000/api/health" > /dev/null; do
+                echo "   Grafana not ready yet, waiting..."
+                sleep 5
+              done
+              echo "✅ Grafana is ready!"
+
+              # Delete any existing service account first
+              echo "🗑️  Checking for existing service account..."
+              EXISTING_SA=$(curl -s -H "Authorization: Basic YWRtaW46YWRtaW4=" \
+                "http://host.docker.internal:3000/api/serviceaccounts/search?query=kubepark-live-streaming")
+
+              if echo "$EXISTING_SA" | grep -q "kubepark-live-streaming"; then
+                echo "🗑️  Found existing service account, deleting it..."
+                SA_ID=$(echo "$EXISTING_SA" | grep -o '"id":[0-9]*' | head -1 | cut -d':' -f2)
+                DELETE_RESPONSE=$(curl -s -X DELETE \
+                  "http://host.docker.internal:3000/api/serviceaccounts/$SA_ID" \
+                  -H "Authorization: Basic YWRtaW46YWRtaW4=")
+                echo "✅ Existing service account deleted"
+              else
+                echo "ℹ️  No existing service account found"
+              fi
+
+              # Delete existing Kubernetes secret if it exists
+              echo "🗑️  Cleaning up existing Kubernetes secret..."
+              kubectl delete secret grafana-api-key -n park --ignore-not-found=true
+              echo "✅ Secret cleanup complete"
+
+              # Create service account
+              echo "🔑 Creating new service account..."
+              SA_RESPONSE=$(curl -s -X POST \
+                "http://host.docker.internal:3000/api/serviceaccounts" \
+                -H "Content-Type: application/json" \
+                -H "Authorization: Basic YWRtaW46YWRtaW4=" \
+                -d '{
+                  "name": "kubepark-live-streaming",
+                  "role": "Admin",
+                  "isDisabled": false
+                }')
+
+              if echo "$SA_RESPONSE" | grep -q "id"; then
+                SA_ID=$(echo "$SA_RESPONSE" | grep -o '"id":[0-9]*' | cut -d':' -f2)
+                echo "✅ Service account created successfully with ID: $SA_ID"
+                
+                # Create token for the service account
+                echo "🔑 Creating token for service account..."
+                TOKEN_RESPONSE=$(curl -s -X POST \
+                  "http://host.docker.internal:3000/api/serviceaccounts/$SA_ID/tokens" \
+                  -H "Content-Type: application/json" \
+                  -H "Authorization: Basic YWRtaW46YWRtaW4=" \
+                  -d '{
+                    "name": "kubepark-live-streaming-token"
+                  }')
+
+                if echo "$TOKEN_RESPONSE" | grep -q "key"; then
+                  API_KEY=$(echo "$TOKEN_RESPONSE" | grep -o '"key":"[^"]*"' | cut -d'"' -f4)
+                  echo "✅ Token created successfully!"
+                
+                  # Create Kubernetes secret
+                  echo "🔐 Creating Kubernetes secret..."
+                  kubectl create secret generic grafana-api-key \
+                    --namespace=park \
+                    --from-literal=api-key="$API_KEY"
+                
+                  echo "✅ Secret created successfully!"
+                  echo "🎉 Grafana Live setup complete!"
+                else
+                  echo "❌ Failed to create token. Response:"
+                  echo "$TOKEN_RESPONSE"
+                  exit 1
+                fi
+              else
+                echo "❌ Failed to create service account. Response:"
+                echo "$SA_RESPONSE"
+                exit 1
+              fi
+          resources:
+            requests:
+              memory: "64Mi"
+              cpu: "100m"
+            limits:
+              memory: "128Mi"
+              cpu: "200m"
+      serviceAccountName: grafana-live-setup
+
+---
+# ServiceAccount for the setup job
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: grafana-live-setup
+  namespace: park
+  labels:
+    app.kubernetes.io/name: kubepark
+    app.kubernetes.io/component: grafana-live-setup
+
+---
+# Role for creating secrets
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: grafana-live-setup
+  namespace: park
+  labels:
+    app.kubernetes.io/name: kubepark
+    app.kubernetes.io/component: grafana-live-setup
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["create", "update", "patch", "get", "list", "delete"]
+
+---
+# RoleBinding for the setup job
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: grafana-live-setup
+  namespace: park
+  labels:
+    app.kubernetes.io/name: kubepark
+    app.kubernetes.io/component: grafana-live-setup
+subjects:
+  - kind: ServiceAccount
+    name: grafana-live-setup
+    namespace: park
+roleRef:
+  kind: Role
+  name: grafana-live-setup
+  apiGroup: rbac.authorization.k8s.io
+
+---
 # PersistentVolume for Park
 apiVersion: v1
 kind: PersistentVolume
@@ -97,6 +261,15 @@ spec:
             - "debug"
             - "--volume"
             - "/data"
+            - "--grafana-url"
+            - "http://host.docker.internal:3000"
+          env:
+            - name: GRAFANA_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: grafana-api-key
+                  key: api-key
+                  optional: true
           volumeMounts:
             - name: park-storage
               mountPath: /data

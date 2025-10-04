@@ -16,9 +16,9 @@ Welcome to KubePark! This walkthrough demonstrates a complete Kubernetes observa
 
    ```bash
    task build
-   task deploy-park
-   task deploy-carousel
-   task deploy-restroom
+   task deploy -- park
+   task deploy -- carousel
+   task deploy -- restroom
    ```
 
 3. **Monitor the park:**
@@ -38,9 +38,9 @@ Run `task --list` to see all available commands, or just `task` for help:
 
 ### Game Commands
 
-- `task deploy-park` - Start the park (begins the game!)
-- `task deploy-carousel` - Deploy carousel attraction
-- `task deploy-restroom` - Deploy restroom attraction
+- `task deploy -- park` - Start the park (begins the game!)
+- `task deploy -- carousel` - Deploy carousel attraction
+- `task deploy -- restroom` - Deploy restroom attraction
 - `task list-carousels` - Show all deployed carousel instances
 - `task list-restrooms` - Show all deployed restroom instances
 - `task remove-restrooms` - Remove all restroom instances
@@ -50,8 +50,8 @@ Run `task --list` to see all available commands, or just `task` for help:
 - `task status` - Show current park status
 - `task logs` - View park logs
 - `task open-grafana` - Open Grafana dashboard
-- `task restart-monitoring` - Restart monitoring stack
-- `task restart-alloy` - Restart Alloy log collection
+- `task restart -- monitoring` - Restart monitoring stack
+- `task restart -- alloy` - Restart Alloy log collection
 - `task upgrade-alloy` - Upgrade Alloy with latest configuration
 
 ### Cleanup
@@ -62,7 +62,7 @@ Run `task --list` to see all available commands, or just `task` for help:
 
 Task includes specific commands for managing Alloy:
 
-- `task restart-alloy` - Restart the Alloy DaemonSet
+- `task restart -- alloy` - Restart the Alloy DaemonSet
 - `task upgrade-alloy` - Upgrade Alloy with the latest configuration
 - `task status` - Shows Alloy pod status (uses correct Helm labels)
 

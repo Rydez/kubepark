@@ -2,19 +2,22 @@ package main
 
 import (
 	"flag"
+	"os"
 )
 
 // Config represents the park configuration
 type Config struct {
-	Image       string
-	SelfURL     string
-	Mode        string
-	VolumePath  string
-	Closed      bool
-	EntranceFee float64
-	OpensAt     int
-	ClosesAt    int
-	LogLevel    string
+	Image         string
+	SelfURL       string
+	Mode          string
+	VolumePath    string
+	Closed        bool
+	EntranceFee   float64
+	OpensAt       int
+	ClosesAt      int
+	LogLevel      string
+	GrafanaURL    string
+	GrafanaAPIKey string
 }
 
 func RegisterFlags(config *Config) {
@@ -27,5 +30,12 @@ func RegisterFlags(config *Config) {
 	flag.IntVar(&config.OpensAt, "opens-at", 8, "Hour at which the park opens")
 	flag.IntVar(&config.ClosesAt, "closes-at", 20, "Hour at which the park closes")
 	flag.StringVar(&config.LogLevel, "log-level", "info", "Log level (debug, info, warn, error)")
+	flag.StringVar(&config.GrafanaURL, "grafana-url", "http://kubepark-grafana:3000", "Grafana server URL for Live streaming")
+	flag.StringVar(&config.GrafanaAPIKey, "grafana-api-key", "", "Grafana API key for Live streaming")
 	flag.Parse()
+
+	// Override with environment variables if set
+	if envAPIKey := os.Getenv("GRAFANA_API_KEY"); envAPIKey != "" {
+		config.GrafanaAPIKey = envAPIKey
+	}
 }
