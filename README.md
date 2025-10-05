@@ -1,39 +1,61 @@
 # kubepark 🎢
 
-Welcome to kubepark, an innovative amusement park simulation game that runs on Kubernetes! Build, manage, and optimize your virtual amusement park by deploying various attractions, monitoring guest behavior, and maximizing profits.
+### An amusement park tycoon game that runs on Kubernetes!
+
+You are an entrepreneur seeking to build an amazing amusement park by deploying various attractions, monitoring guest behavior, and maximizing profits.
 
 - Deploy and manage various attractions (rides, amenities, concessions)
 - Monitor guest satisfaction and park performance
 - Handle maintenance and repairs
 - Track revenue and expenses
 
-## 🎮 How It Works
+## 🎮 How it works
 
-The simulation consists of three main components:
+**Commands:** Actions are performed using the commands defined in the Taskfile. Use these commands to start the game and create your park. The commands will deploy k8s components which function as the different parts of your amusement park.
 
-**Park**: The central park service is responsible for tracking park finances and attraction inventory, managing the park's operating hours, creating guest jobs, handling attraction registration and discovery, and exposing metrics about the park.
-
-**Attractions**: Kubernetes services that represent different park features. Each attraction has its own HTTP endpoint for guest interaction, and can be configured with custom entrance fees. Maintenance costs apply when attractions break down, and all attractions expose metrics and logs for monitoring.
-
-**Guests**: Kubernetes jobs that simulate park visitors. Guests enter the park and explore attractions, making decisions based on their available money and attraction fees. Each guest reports metrics about their experience, and they leave when they run out of money or when the park closes.
-
-## 🛠️ Technical Details
-
-### Monitoring and Observability
-
-Every component in kubepark exposes:
-
-- Prometheus metrics at `/metrics` on port `9000` about revenue, usage, and guest satisfaction
-- Logs at default Docker container location
+**Monitoring:** Grafana is used to monitor how your park, rides, and guests are doing. The grafana dashboard will tell you what time it is in your park, how much money you have to spend, which rides are broken down, and much more.
 
 ## 🚀 Getting Started
 
-1. Head to the [park](./park) directory to launch the park simulator
-2. Explore the [attractions](./attractions) directory to deploy rides and amenities
-3. Explore the [guest](./guest) directory to learn more about how guests will interact with your park
-4. Monitor your park using tools like Grafana
-5. Optimize your park based on insights from logs and metrics
+1. **Setup the infrastructure:**
+
+   ```bash
+   task setup
+   ```
+
+   This will create a local k8s cluster using Kind (Kubernetes in Docker) and start running your monitoring stack (Grafana, Prometheus, Loki).
+
+2. **Start the game:**
+
+   ```bash
+   task build
+   task deploy -- park
+   ```
+
+   This will build the single image needed, and then deploy an emtpy park ready for you to build.
+
+3. **Monitor the park:**
+
+   ```bash
+   task open-grafana
+   ```
+
+   Grafana is the window into your park. The Grafana dashboard will give you a plethora of information to understand and manage your park.
+
+4. **Create an attraction:**
+
+   ```bash
+   task deploy -- carousel
+   task deploy -- restroom
+   ...
+   ```
+
+   Now you're ready to start building. Spend your money wisely.
 
 ## 🔒 Remember
 
-This is a simulation game meant to be played through Kubernetes orchestration. Avoid direct HTTP requests or data manipulation - let the system work as designed!
+This is a game meant to be played through Kubernetes orchestration. Avoid direct HTTP requests or data manipulation to let the system work as designed.
+
+## Developers
+
+For more advanced docs that will help develop this game, but are irrelevant to playing it, see [DEVELOP.md](./DEVELOP.md).

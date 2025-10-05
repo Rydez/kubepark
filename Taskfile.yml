@@ -46,7 +46,7 @@ tasks:
     cmds:
       - echo "🏗️  Setting up KubePark infrastructure..."
       - echo "Creating Kind cluster with local registry..."
-      - cd cluster && ./kind-with-registry.sh
+      - ./k8s/cluster/kind-with-registry.sh
       - echo "Starting monitoring stack..."
       - docker-compose up -d
       - echo "Waiting for monitoring stack to be ready..."
@@ -262,7 +262,7 @@ tasks:
       - echo "Removing Grafana container to clear cache..."
       - docker-compose rm -f grafana
       - echo "Removing Grafana data volume to clear all cached dashboards..."
-      - docker volume rm walkthrough_grafana_data
+      - docker volume rm kubepark_grafana_data
       - echo "Starting fresh Grafana with clean state..."
       - docker-compose up -d grafana
       - echo "⏳ Waiting for Grafana to initialize completely..."
