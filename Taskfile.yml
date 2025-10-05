@@ -46,7 +46,7 @@ tasks:
     cmds:
       - echo "🏗️  Setting up KubePark infrastructure..."
       - echo "Creating Kind cluster with local registry..."
-      - ./k8s/cluster/kind-with-registry.sh
+      - cd k8s/cluster && ./kind-with-registry.sh
       - echo "Starting monitoring stack..."
       - docker-compose up -d
       - echo "Waiting for monitoring stack to be ready..."
@@ -62,16 +62,15 @@ tasks:
 
   build:
     desc: "🔨 Building KubePark image..."
-    dir: ..
     cmds:
       - echo "🔨 Building KubePark image..."
       - docker build -t {{.REGISTRY}}/{{.IMAGE_NAME}}:{{.IMAGE_TAG}} .
       - echo "📤 Pushing image to local registry..."
       - docker push {{.REGISTRY}}/{{.IMAGE_NAME}}:{{.IMAGE_TAG}}
-      - echo "✅ Build complete! Run 'task deploy park' to start the game."
+      - echo "✅ Build complete! Run 'task deploy -- park' to start the game."
 
   deploy:
-    desc: "🎢 Deploy park components (usage: task deploy <type>)"
+    desc: "🎢 Deploy park components (usage: task deploy -- <type>)"
     vars:
       TYPE: "{{.CLI_ARGS}}"
       INSTANCE_ID:
@@ -117,13 +116,13 @@ tasks:
           *)
             echo "❌ Invalid deployment type: {{.TYPE}}"
             echo "Valid types: park, carousel, restroom, wooden-rollercoaster"
-            echo "Usage: task deploy <type>"
+            echo "Usage: task deploy -- <type>"
             exit 1
             ;;
         esac
 
   delete:
-    desc: "🗑️ Delete a single attraction instance (usage: task delete <type>)"
+    desc: "🗑️ Delete a single attraction instance (usage: task delete -- <type>)"
     vars:
       TYPE: "{{.CLI_ARGS}}"
     cmds:
@@ -153,12 +152,12 @@ tasks:
           *)
             echo "❌ Invalid type: {{.TYPE}}"
             echo "Valid types: carousel, restroom, wooden-rollercoaster"
-            echo "Usage: task delete <type>"
+            echo "Usage: task delete -- <type>"
             echo ""
             echo "Examples:"
-            echo "  task delete carousel             # Delete any carousel instance"
-            echo "  task delete restroom             # Delete any restroom instance"
-            echo "  task delete wooden-rollercoaster # Delete any wooden rollercoaster instance"
+            echo "  task delete -- carousel             # Delete any carousel instance"
+            echo "  task delete -- restroom             # Delete any restroom instance"
+            echo "  task delete -- wooden-rollercoaster # Delete any wooden rollercoaster instance"
             exit 1
             ;;
         esac
@@ -203,7 +202,7 @@ tasks:
       - open http://localhost:3000 2>/dev/null || echo "Please open http://localhost:3000 manually"
 
   restart:
-    desc: "🔄 Restart park components (usage: task restart <component>)"
+    desc: "🔄 Restart park components (usage: task restart -- <component>)"
     vars:
       COMPONENT: "{{.CLI_ARGS}}"
     cmds:
@@ -241,7 +240,7 @@ tasks:
           *)
             echo "❌ Invalid component: {{.COMPONENT}}"
             echo "Valid components: monitoring, alloy, park, attractions"
-            echo "Usage: task restart <component>"
+            echo "Usage: task restart -- <component>"
             exit 1
             ;;
         esac

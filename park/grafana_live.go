@@ -31,7 +31,7 @@ func NewGrafanaLiveClient(grafanaURL, apiKey string) *GrafanaLiveClient {
 	return &GrafanaLiveClient{
 		baseURL:  grafanaURL,
 		apiKey:   apiKey,
-		streamID: "kubepark-time",
+		streamID: "kubepark",
 		client: &http.Client{
 			Timeout: 5 * time.Second,
 		},
